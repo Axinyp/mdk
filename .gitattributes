@@ -1,0 +1,24 @@
+# Default: normalize LF on commit
+* text=auto
+
+# Shell scripts must stay LF
+*.sh text eol=lf
+
+# Python
+*.py text eol=lf
+
+# All markdown / yaml / json: normalize
+*.md text
+*.yaml text
+*.yml text
+*.json text
+*.ts text
+*.txt text
+
+# Dockerfile
+Dockerfile text eol=lf
+
+# Binaries
+*.png binary
+*.jpg binary
+*.ico binary

@@ -1,0 +1,35 @@
+name: mdk-mkcontrol
+version: "1.0.0"
+description: "MKControl Development Kit — 中控系统开发工具链"
+author: MDK
+license: MIT
+entry: __init__.py
+
+skills:
+  - path: ../../core/skills/mkcontrol/SKILL.md
+  - path: ../../core/skills/protocol/SKILL.md
+  - path: ../../core/skills/cht-ref/SKILL.md
+  - path: ../../core/skills/xml-ref/SKILL.md
+
+tools:
+  - name: protocol_list
+    description: 列出协议库所有协议，支持关键词过滤
+  - name: protocol_show
+    description: 查看某个协议的完整详情
+  - name: protocol_add
+    description: 添加新设备协议到库
+  - name: cht_patterns
+    description: 查询代码模式（场景联动/窗帘/音量等）
+  - name: cht_functions
+    description: 查询系统函数签名和用法
+  - name: xml_controls
+    description: 查询控件类型和属性规范
+  - name: xml_structure
+    description: 查询 Project.xml 结构规范
+
+keywords:
+  - mkcontrol
+  - 中控
+  - 会议室
+  - 智能控制
+  - 触摸屏
