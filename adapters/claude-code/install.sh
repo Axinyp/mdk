@@ -33,6 +33,20 @@ if [[ "$1" == "--uninstall" ]]; then
         rm -rf "$TARGET_COMMANDS"
         echo "✅ 已删除命令目录: $TARGET_COMMANDS"
     fi
+    # 移除 MCP Server 注册
+    CLAUDE_JSON="$HOME/.claude/claude.json"
+    if [[ -f "$CLAUDE_JSON" ]]; then
+        python3 - "$CLAUDE_JSON" <<'PYEOF'
+import sys, json
+config_path = sys.argv[1]
+with open(config_path, 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+cfg.get('mcpServers', {}).pop('mdk', None)
+with open(config_path, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, indent=2, ensure_ascii=False)
+PYEOF
+        echo "✅ 已从 claude.json 移除 MCP Server 注册"
+    fi
     echo "MDK 卸载完成。"
     exit 0
 fi
@@ -82,6 +96,32 @@ for src_file in "$COMMANDS_DIR"/*.md; do
 done
 
 echo "✅ commands 安装成功（12 个命令）"
+
+# 注册 MCP Server 到 ~/.claude/claude.json
+CLAUDE_JSON="$HOME/.claude/claude.json"
+MCP_SERVER_PATH="$MDK_ROOT/adapters/mcp-server/server.py"
+
+if [[ ! -f "$CLAUDE_JSON" ]]; then
+    echo '{"mcpServers":{}}' > "$CLAUDE_JSON"
+fi
+
+# 注入 mdk MCP server 条目（用 Python 安全合并 JSON）
+python3 - "$CLAUDE_JSON" "$MCP_SERVER_PATH" <<'PYEOF'
+import sys, json
+config_path, server_path = sys.argv[1], sys.argv[2]
+with open(config_path, 'r', encoding='utf-8') as f:
+    cfg = json.load(f)
+cfg.setdefault('mcpServers', {})['mdk'] = {
+    'command': 'python',
+    'args': [server_path],
+    'env': {}
+}
+with open(config_path, 'w', encoding='utf-8') as f:
+    json.dump(cfg, f, indent=2, ensure_ascii=False)
+PYEOF
+
+echo "✅ MCP Server 已注册到 $CLAUDE_JSON"
+echo "   重启 Claude Code 后可使用 MDK MCP tools"
 
 echo ""
 echo "=============================="

@@ -624,16 +624,16 @@ tools = [
 
 ### Phase 4：MCP Server 适配（网页调用基础）
 
-**Step 11: MCP Server 实现**
-- 实现 `adapters/mcp-server/server.py`
-- 注册 12+ 个 MCP tools（对应所有命令）
-- tool handler 调用 core/ 的知识库和脚本
-- 预期产物：可运行的 MCP Server
+**Step 11: MCP Server 实现** ✅ 已完成（2026-04-22）
+- `adapters/mcp-server/server.py` 832行，14 个 MCP tools（stdio 协议）
+- 验证：`initialize` 握手 ✅、`tools/list` 14个工具 ✅、`protocol_list` 调用 ✅、核心逻辑直测 ✅
+- **实际产物**：可运行的 MCP Server，依赖仅 `mcp>=1.0.0`
 
-**Step 12: MCP Server 部署**
-- 编写 Dockerfile
-- 本地测试：`python server.py` → 用 Claude Code MCP Client 连接验证
-- 预期产物：可容器化部署的 MCP Server
+**Step 12: MCP Server 部署** ✅ 已完成（2026-04-22）
+- Dockerfile 已修复（build context 从 `mdk/` 根目录，`COPY ../../core` 路径错误已改正）
+- 注册到 `~/.claude/claude.json`（`mcpServers.mdk` 条目）
+- `adapters/claude-code/install.sh` 更新：安装时自动注册 MCP，卸载时自动移除
+- **实际产物**：Claude Code 重启后可通过 MCP 调用 MDK 所有工具
 
 ### Phase 5：多平台适配
 
