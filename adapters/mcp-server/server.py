@@ -95,8 +95,8 @@ async def list_tools() -> list[types.Tool]:
     return [
         # 生成工具
         types.Tool(
-            name="mkcontrol_parse",
-            description="解析中控系统需求，提取设备、功能、JoinNumber，输出确认清单（第1步）",
+            name="mkcontrol_generate",
+            description="解析中控系统需求，提取设备、功能、JoinNumber，输出人可读的确认清单（第1步）",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -109,8 +109,8 @@ async def list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
-            name="mkcontrol_generate",
-            description="根据确认后的配置生成 Project.xml 和 .cht 文件（第2步，需先调用 mkcontrol_parse）",
+            name="mkcontrol_confirm",
+            description="用户确认清单后，生成 Project.xml 和 .cht 文件（第2步，需先调用 mkcontrol_generate）",
             inputSchema={
                 "type": "object",
                 "properties": {
@@ -128,7 +128,21 @@ async def list_tools() -> list[types.Tool]:
             }
         ),
         types.Tool(
-            name="mkcontrol_validate",
+            name="validate_cht",
+            description="校验 .cht 文件的语法规范（块顺序、变量初始化、函数调用等 14 项）",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "cht_content": {
+                        "type": "string",
+                        "description": ".cht 文件内容"
+                    }
+                },
+                "required": ["cht_content"]
+            }
+        ),
+        types.Tool(
+            name="cross_validate",
             description="交叉校验 Project.xml 和 .cht 文件的 JoinNumber 一致性",
             inputSchema={
                 "type": "object",
@@ -337,12 +351,14 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
 
 
 async def dispatch_tool(name: str, args: dict) -> str:
-    if name == "mkcontrol_parse":
-        return await tool_mkcontrol_parse(args)
-    elif name == "mkcontrol_generate":
+    if name == "mkcontrol_generate":
         return await tool_mkcontrol_generate(args)
-    elif name == "mkcontrol_validate":
-        return await tool_mkcontrol_validate(args)
+    elif name == "mkcontrol_confirm":
+        return await tool_mkcontrol_confirm(args)
+    elif name == "validate_cht":
+        return await tool_validate_cht(args)
+    elif name == "cross_validate":
+        return await tool_cross_validate(args)
     elif name == "protocol_list":
         return await tool_protocol_list(args)
     elif name == "protocol_show":
@@ -703,9 +719,9 @@ async def tool_xml_structure(args: dict) -> str:
     return content
 
 
-async def tool_mkcontrol_parse(args: dict) -> str:
+async def tool_mkcontrol_generate(args: dict) -> str:
+    """解析需求 → 输出确认清单（第1步）"""
     desc = args.get("description", "")
-    # 返回引导用户完成需求确认的提示
     result = f"""## 需求解析结果
 
 ### 输入描述
@@ -722,7 +738,7 @@ MKControl 生成器需要以下信息来生成 Project.xml 和 .cht 文件：
 
 ### 建议操作
 1. 先调用 `protocol_list` 查看现有协议库中是否有匹配的设备
-2. 补充上述缺失信息后，再调用 `mkcontrol_generate` 生成文件
+2. 补充上述缺失信息后，调用 `mkcontrol_confirm` 生成文件
 
 ### 从描述中初步提取
 
@@ -748,14 +764,15 @@ def _extract_hints(desc: str) -> str:
     return "\n".join(hints) if hints else "（需要更多信息才能解析）"
 
 
-async def tool_mkcontrol_generate(args: dict) -> str:
-    return """## mkcontrol_generate
+async def tool_mkcontrol_confirm(args: dict) -> str:
+    """用户确认后生成 XML + .cht（第2步）"""
+    return """## mkcontrol_confirm
 
 此工具需要：
-1. 已通过 `mkcontrol_parse` 完成需求解析
+1. 已通过 `mkcontrol_generate` 完成需求解析
 2. 用户已确认设备清单和功能配置
 
-完整的 XML + CHT 生成逻辑需要上下文信息，建议使用 Claude Code 中的 `/mkcontrol` 命令进行交互式生成，
+完整的 XML + CHT 生成逻辑需要 LLM 上下文推理，建议使用 Claude Code 中的 `/mk:control` 命令进行交互式生成，
 或提供完整的 confirmed_plan JSON 数据。
 
 ### confirmed_plan 格式示例
@@ -775,46 +792,94 @@ async def tool_mkcontrol_generate(args: dict) -> str:
 """
 
 
-async def tool_mkcontrol_validate(args: dict) -> str:
+async def tool_validate_cht(args: dict) -> str:
+    """校验 .cht 语法规范（调用 core/scripts/validate.py）"""
+    import subprocess, tempfile, os
+    cht_content = args.get("cht_content", "")
+    validate_script = SCRIPTS_DIR / "validate.py"
+    if not validate_script.exists():
+        return f"[ERROR] 校验脚本不存在: {validate_script}"
+
+    with tempfile.NamedTemporaryFile(mode='w', suffix='.cht', encoding='utf-8', delete=False) as f:
+        f.write(cht_content)
+        tmp_path = f.name
+    try:
+        result = subprocess.run(
+            ["python", str(validate_script), tmp_path],
+            capture_output=True, text=True, timeout=30
+        )
+        output = result.stdout or result.stderr or "（无输出）"
+        return f"## .cht 语法校验结果\n\n```\n{output}\n```"
+    except subprocess.TimeoutExpired:
+        return "[ERROR] 校验超时"
+    finally:
+        os.unlink(tmp_path)
+
+
+async def tool_cross_validate(args: dict) -> str:
+    """交叉校验 XML ↔ .cht 的 JoinNumber 一致性"""
     xml_content = args.get("xml_content", "")
     cht_content = args.get("cht_content", "")
 
-    # 提取 XML JoinNumber
+    # 剥离 // 单行注释（避免注释掉的事件被误识别）
+    cht_stripped = re.sub(r'//[^\n]*', '', cht_content)
+
+    # 提取 XML 非零 JoinNumber
     xml_joins = set()
     for m in re.finditer(r'JoinNumber="(\d+)"', xml_content):
         n = int(m.group(1))
         if n > 0:
             xml_joins.add(n)
 
-    # 提取 CHT JoinNumber
+    # 区分纯导航按钮（只有 JumpPage，没有 JoinNumber > 0）—— 豁免 Critical
+    nav_only_joins = set()
+    for btn in re.finditer(r'<Control[^>]*Type="DFCButton"[^>]*>(.*?)</Control>', xml_content, re.DOTALL):
+        btn_body = btn.group(1)
+        jn_match = re.search(r'JoinNumber="(\d+)"', btn_body)
+        jn = int(jn_match.group(1)) if jn_match else 0
+        has_jump = bool(re.search(r'JumpPage=".+?"', btn_body))
+        if jn == 0 and has_jump:
+            nav_only_joins.add(0)
+
+    # 提取 CHT 事件
     cht_button_events = set()
-    for m in re.finditer(r'BUTTON_EVENT\s*\(\s*\w+\s*,\s*(\d+)\s*\)', cht_content):
+    for m in re.finditer(r'BUTTON_EVENT\s*\(\s*\w+\s*,\s*(\d+)\s*\)', cht_stripped):
         cht_button_events.add(int(m.group(1)))
 
     cht_level_events = set()
-    for m in re.finditer(r'LEVEL_EVENT\s*\(\s*\w+\s*,\s*(\d+)\s*\)', cht_content):
+    for m in re.finditer(r'LEVEL_EVENT\s*\(\s*\w+\s*,\s*(\d+)\s*\)', cht_stripped):
         cht_level_events.add(int(m.group(1)))
 
     cht_all = cht_button_events | cht_level_events
     for pattern in [r'SET_BUTTON\s*\(\w+,\s*(\d+)', r'SEND_TEXT\s*\(\w+,\s*(\d+)',
                     r'SET_LEVEL\s*\(\w+,\s*(\d+)', r'SEND_PICTURE\s*\(\w+,\s*(\d+)']:
-        for m in re.finditer(pattern, cht_content):
+        for m in re.finditer(pattern, cht_stripped):
             cht_all.add(int(m.group(1)))
 
-    # 交叉检验
     xml_only = xml_joins - cht_all
     cht_event_only = (cht_button_events | cht_level_events) - xml_joins
 
-    result = f"## 交叉校验结果\n\n"
+    result = "## 交叉校验结果\n\n"
     result += f"XML JoinNumber 数量: {len(xml_joins)}\n"
     result += f"CHT 事件 JoinNumber 数量: {len(cht_button_events | cht_level_events)}\n\n"
 
+    criticals = []
+    warnings = []
+
     if xml_only:
-        result += f"🔴 XML 有但 CHT 无处理 ({len(xml_only)} 项): {sorted(xml_only)}\n"
+        criticals.append(f"XML 有但 CHT 无处理 ({len(xml_only)} 项): {sorted(xml_only)}")
     if cht_event_only:
-        result += f"🔴 CHT 事件但 XML 无控件 ({len(cht_event_only)} 项): {sorted(cht_event_only)}\n"
-    if not xml_only and not cht_event_only:
-        result += "✅ 无 Critical 问题\n"
+        # 虚拟通道/外部触发属合法设计，降为 Warning
+        warnings.append(f"CHT 事件但 XML 无控件 ({len(cht_event_only)} 项): {sorted(cht_event_only)}")
+
+    if criticals:
+        result += "### 🔴 Critical\n" + "\n".join(f"- {c}" for c in criticals) + "\n\n"
+    if warnings:
+        result += "### 🟡 Warning\n" + "\n".join(f"- {w}" for w in warnings) + "\n\n"
+    if not criticals and not warnings:
+        result += "✅ 无问题（Critical=0, Warning=0）\n"
+    elif not criticals:
+        result += f"✅ 无 Critical 问题（Warning={len(warnings)}）\n"
 
     return result
 
