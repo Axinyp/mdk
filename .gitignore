@@ -42,6 +42,9 @@ desktop.ini
 # Docker
 *.log
 
+# Claude local settings (machine-specific)
+.claude/settings.local.json
+
 # Temp
 tmp/
 temp/
