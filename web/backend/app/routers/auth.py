@@ -35,7 +35,7 @@ async def register(
     existing = await db.execute(select(User).where(User.username == req.username))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Username already exists")
-    user = User(username=req.username, password=hash_password(req.password), role=req.role)
+    user = User(username=req.username.strip(), password=hash_password(req.password), role=req.role, must_change_password=True)
     db.add(user)
     await db.commit()
     await db.refresh(user)

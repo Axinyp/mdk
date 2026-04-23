@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
@@ -75,7 +76,11 @@ async def get_protocol(protocol_id: int, db: AsyncSession = Depends(get_db), _us
 async def create_protocol(req: ProtocolCreate, db: AsyncSession = Depends(get_db), _admin=Depends(require_admin)):
     proto = Protocol(**req.model_dump())
     db.add(proto)
-    await db.commit()
+    try:
+        await db.commit()
+    except IntegrityError as exc:
+        await db.rollback()
+        raise HTTPException(status_code=409, detail="Protocol filename already exists") from exc
     await db.refresh(proto)
     return proto
 

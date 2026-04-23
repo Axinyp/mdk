@@ -19,7 +19,10 @@ def hash_password(password: str) -> str:
 
 
 def verify_password(plain: str, hashed: str) -> bool:
-    return bcrypt.checkpw(plain.encode(), hashed.encode())
+    try:
+        return bcrypt.checkpw(plain.encode(), hashed.encode())
+    except (ValueError, TypeError):
+        return False
 
 
 def create_token(user_id: int, username: str, role: str) -> str:
@@ -40,7 +43,13 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> User:
     payload = decode_token(credentials.credentials)
-    user_id = int(payload["sub"])
+    subject = payload.get("sub")
+    if not subject:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token")
+    try:
+        user_id = int(subject)
+    except (TypeError, ValueError) as exc:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token") from exc
     result = await db.execute(select(User).where(User.id == user_id, User.status == "active"))
     user = result.scalar_one_or_none()
     if not user:

@@ -1,8 +1,9 @@
-from fastapi import APIRouter, Query
+from fastapi import APIRouter, Depends, Query
 
 from ..services import knowledge
+from ..services.auth import get_current_user
 
-router = APIRouter(prefix="/api/ref", tags=["reference"])
+router = APIRouter(prefix="/api/ref", tags=["reference"], dependencies=[Depends(get_current_user)])
 
 
 @router.get("/cht/devices")

@@ -58,8 +58,8 @@ class UserCreate(BaseModel):
 
 
 class UserUpdate(BaseModel):
-    role: str | None = None
-    status: str | None = None
+    role: str | None = Field(default=None, pattern="^(admin|member)$")
+    status: str | None = Field(default=None, pattern="^(active|disabled)$")
 
 
 class SettingResponse(BaseModel):

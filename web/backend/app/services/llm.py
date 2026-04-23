@@ -12,7 +12,7 @@ from ..models.llm_config import LlmConfig
 
 
 def _cipher() -> Fernet:
-    key = base64.urlsafe_b64encode(hashlib.sha256(settings.jwt_secret.encode()).digest())
+    key = base64.urlsafe_b64encode(hashlib.sha256(settings.llm_encryption_key.encode()).digest())
     return Fernet(key)
 
 
@@ -27,8 +27,8 @@ def decrypt_api_key(value: str | None) -> str | None:
         return None
     try:
         return _cipher().decrypt(value.encode()).decode()
-    except (InvalidToken, ValueError):
-        return value
+    except (InvalidToken, ValueError) as exc:
+        raise ValueError("Stored API key could not be decrypted") from exc
 
 
 async def get_default_config(db: AsyncSession) -> LlmConfig | None:
@@ -86,5 +86,5 @@ async def test_connection(config: LlmConfig) -> tuple[bool, str]:
         if not content:
             return False, "Connected but model returned empty response"
         return True, content[:200]
-    except Exception as e:
-        return False, str(e)
+    except Exception:
+        return False, "Connection test failed"
