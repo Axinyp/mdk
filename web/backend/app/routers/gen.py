@@ -59,15 +59,13 @@ async def parse_session(
     user: User = Depends(get_current_user),
 ):
     session = await _get_user_session(db, session_id, user.id)
-    if session.status not in ("created", "parsed", "error"):
-        raise HTTPException(status_code=400, detail=f"Cannot parse in status: {session.status}")
     try:
-        parsed = await orchestrator.stage_parse(db, session)
+        parsed = await orchestrator.stage_parse(db, session.id, session.description)
         return {"status": "parsed", "data": parsed.model_dump()}
-    except Exception as e:
-        session.status = "error"
-        await db.commit()
-        raise HTTPException(status_code=500, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=502, detail="Parse stage failed")
 
 
 @router.post("/sessions/{session_id}/confirm")
@@ -78,13 +76,16 @@ async def confirm_session(
     user: User = Depends(get_current_user),
 ):
     session = await _get_user_session(db, session_id, user.id)
-    if session.status not in ("parsed", "confirmed"):
-        raise HTTPException(status_code=400, detail=f"Cannot confirm in status: {session.status}")
-    functions_with_joins = await orchestrator.stage_confirm(db, session, req.data)
-    return {
-        "status": "confirmed",
-        "functions": [f.model_dump() for f in functions_with_joins],
-    }
+    try:
+        functions_with_joins = await orchestrator.stage_confirm(db, session.id, req.data)
+        return {
+            "status": "confirmed",
+            "functions": [f.model_dump() for f in functions_with_joins],
+        }
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception:
+        raise HTTPException(status_code=500, detail="Confirm stage failed")
 
 
 @router.post("/sessions/{session_id}/generate")
@@ -94,10 +95,8 @@ async def generate_session(
     user: User = Depends(get_current_user),
 ):
     session = await _get_user_session(db, session_id, user.id)
-    if session.status not in ("confirmed", "error"):
-        raise HTTPException(status_code=400, detail=f"Cannot generate in status: {session.status}")
     return StreamingResponse(
-        orchestrator.stage_generate(db, session),
+        orchestrator.stage_generate(db, session.id),
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
