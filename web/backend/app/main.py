@@ -79,10 +79,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from .routers import admin, auth, protocols, ref
+from .routers import admin, auth, gen, protocols, ref
 
 app.include_router(auth.router)
 app.include_router(admin.router)
+app.include_router(gen.router)
 app.include_router(protocols.router)
 app.include_router(ref.router)
 

@@ -69,6 +69,10 @@ def search_functions(query: str = "") -> str:
     return f"未找到: {query}"
 
 
+def get_syntax_rules() -> str:
+    return _read(REFERENCES_DIR / "core" / "syntax-rules.md")
+
+
 def get_patterns(keyword: str = "") -> str:
     content = _read(REFERENCES_DIR / "core" / "code-patterns.md")
     if not keyword:
