@@ -21,6 +21,7 @@ export default function Generator() {
   const [result, setResult] = useState<{ xml: string; cht: string; report: any } | null>(null)
   const [error, setError] = useState('')
   const [genStatus, setGenStatus] = useState('')
+  const [showPrevDesc, setShowPrevDesc] = useState(false)
 
   const handleParse = async () => {
     if (!description.trim()) return
@@ -133,6 +134,29 @@ export default function Generator() {
         </div>
       )}
 
+      {/* Previous step context */}
+      {stage !== 'input' && stage !== 'parsing' && description && (
+        <div className="mb-4 bg-neutral-50 rounded-lg border border-neutral-200 overflow-hidden">
+          <button
+            onClick={() => setShowPrevDesc(!showPrevDesc)}
+            className="w-full px-4 py-2.5 flex items-center justify-between text-left hover:bg-neutral-100 transition-colors"
+          >
+            <div className="flex items-center gap-2">
+              <span className="w-5 h-5 rounded-full bg-neutral-200 text-neutral-600 flex items-center justify-center text-xs">1</span>
+              <span className="text-sm text-neutral-600 font-medium">需求描述</span>
+            </div>
+            <svg className={`w-4 h-4 text-neutral-400 transition-transform ${showPrevDesc ? 'rotate-180' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+            </svg>
+          </button>
+          {showPrevDesc && (
+            <div className="px-4 pb-3 border-t border-neutral-200 pt-2">
+              <p className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed max-h-40 overflow-y-auto">{description}</p>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Stage: Input */}
       {(stage === 'input' || stage === 'parsing') && (
         <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-6">
@@ -141,7 +165,7 @@ export default function Generator() {
             value={description}
             onChange={(e) => setDescription(e.target.value)}
             placeholder="例如：我需要用 TS-9101 控制 4 路灯光，触摸屏编号 10，继电器编号 1，灯光 1 连接号 103，灯光 2 连接号 105，实现全开全关和单独控制..."
-            className="w-full h-40 px-4 py-3 border border-neutral-200 rounded-lg text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full min-h-[200px] px-4 py-3 border border-neutral-200 rounded-lg text-sm resize-y focus:outline-none focus:ring-2 focus:ring-blue-500"
           />
           <div className="mt-4 flex justify-end">
             <button

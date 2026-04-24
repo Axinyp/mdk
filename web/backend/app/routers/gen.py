@@ -64,8 +64,8 @@ async def parse_session(
         return {"status": "parsed", "data": parsed.model_dump()}
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=502, detail="Parse stage failed")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Parse stage failed: {e}")
 
 
 @router.post("/sessions/{session_id}/confirm")
@@ -84,8 +84,8 @@ async def confirm_session(
         }
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
-    except Exception:
-        raise HTTPException(status_code=500, detail="Confirm stage failed")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Confirm stage failed: {e}")
 
 
 @router.post("/sessions/{session_id}/generate")

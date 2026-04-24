@@ -40,6 +40,28 @@ export default function ConfirmationView({ data, onConfirm, onReParse }: Props) 
     setEditData({ ...editData, functions: editData.functions.filter((_, i) => i !== index) })
   }
 
+  const addDevice = () => {
+    setEditData({ ...editData, devices: [...editData.devices, { name: '', type: '', board: 0, comm: 'RS232' }] })
+  }
+
+  const addFunction = () => {
+    setEditData({ ...editData, functions: [...editData.functions, { name: '', join_number: 0, join_source: 'auto', btn_type: '', control_type: '', device: '' }] })
+  }
+
+  const updatePage = (index: number, field: string, value: any) => {
+    const pages = [...editData.pages]
+    pages[index] = { ...pages[index], [field]: value }
+    setEditData({ ...editData, pages })
+  }
+
+  const removePage = (index: number) => {
+    setEditData({ ...editData, pages: editData.pages.filter((_, i) => i !== index) })
+  }
+
+  const addPage = () => {
+    setEditData({ ...editData, pages: [...editData.pages, { name: '', type: 'main' }] })
+  }
+
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: 'devices', label: '设备清单', count: editData.devices.length },
     { key: 'functions', label: '功能清单', count: editData.functions.length },
@@ -112,7 +134,10 @@ export default function ConfirmationView({ data, onConfirm, onReParse }: Props) 
                     <input type="number" value={d.board} onChange={(e) => updateDevice(i, 'board', parseInt(e.target.value) || 0)}
                       className="w-20 px-2 py-1 border border-neutral-200 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                   </td>
-                  <td className="px-3 py-2 text-neutral-600">{d.comm}</td>
+                  <td className="px-3 py-2">
+                    <input value={d.comm} onChange={(e) => updateDevice(i, 'comm', e.target.value)}
+                      className="w-full px-2 py-1 border border-neutral-200 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                  </td>
                   <td className="px-3 py-2">
                     <button onClick={() => removeDevice(i)} className="text-red-400 hover:text-red-600 text-xs">删除</button>
                   </td>
@@ -120,6 +145,10 @@ export default function ConfirmationView({ data, onConfirm, onReParse }: Props) 
               ))}
             </tbody>
           </table>
+          <button onClick={addDevice}
+            className="mt-2 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors">
+            + 添加设备
+          </button>
         </div>
       )}
 
@@ -160,8 +189,14 @@ export default function ConfirmationView({ data, onConfirm, onReParse }: Props) 
                       {f.join_source === 'user_specified' ? '用户指定' : '自动分配'}
                     </span>
                   </td>
-                  <td className="px-3 py-2 text-neutral-600 text-xs">{f.btn_type || f.control_type}</td>
-                  <td className="px-3 py-2 text-neutral-600 text-xs">{f.device}</td>
+                  <td className="px-3 py-2">
+                    <input value={f.btn_type || f.control_type || ''} onChange={(e) => updateFunction(i, 'control_type', e.target.value)}
+                      className="w-full px-2 py-1 border border-neutral-200 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                  </td>
+                  <td className="px-3 py-2">
+                    <input value={f.device || ''} onChange={(e) => updateFunction(i, 'device', e.target.value)}
+                      className="w-full px-2 py-1 border border-neutral-200 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                  </td>
                   <td className="px-3 py-2">
                     <button onClick={() => removeFunction(i)} className="text-red-400 hover:text-red-600 text-xs">删除</button>
                   </td>
@@ -169,6 +204,10 @@ export default function ConfirmationView({ data, onConfirm, onReParse }: Props) 
               ))}
             </tbody>
           </table>
+          <button onClick={addFunction}
+            className="mt-2 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors">
+            + 添加功能
+          </button>
         </div>
       )}
 
@@ -180,23 +219,35 @@ export default function ConfirmationView({ data, onConfirm, onReParse }: Props) 
               <tr className="bg-neutral-50 text-left">
                 <th className="px-3 py-2 text-xs font-medium text-neutral-500">页面名</th>
                 <th className="px-3 py-2 text-xs font-medium text-neutral-500">类型</th>
+                <th className="px-3 py-2 text-xs font-medium text-neutral-500 w-16">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-neutral-100">
               {editData.pages.map((p, i) => (
                 <tr key={i} className="hover:bg-neutral-50">
-                  <td className="px-3 py-2 text-neutral-700">{p.name}</td>
                   <td className="px-3 py-2">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                      p.type === 'main' ? 'bg-blue-50 text-blue-700' :
-                      p.type === 'dialog' ? 'bg-amber-50 text-amber-700' :
-                      'bg-neutral-100 text-neutral-600'
-                    }`}>{p.type}</span>
+                    <input value={p.name} onChange={(e) => updatePage(i, 'name', e.target.value)}
+                      className="w-full px-2 py-1 border border-neutral-200 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                  </td>
+                  <td className="px-3 py-2">
+                    <select value={p.type} onChange={(e) => updatePage(i, 'type', e.target.value)}
+                      className="px-2 py-1 border border-neutral-200 rounded text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+                      <option value="main">main</option>
+                      <option value="dialog">dialog</option>
+                      <option value="subpage">subpage</option>
+                    </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <button onClick={() => removePage(i)} className="text-red-400 hover:text-red-600 text-xs">删除</button>
                   </td>
                 </tr>
               ))}
             </tbody>
           </table>
+          <button onClick={addPage}
+            className="mt-2 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors">
+            + 添加页面
+          </button>
         </div>
       )}
 

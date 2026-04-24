@@ -1,8 +1,8 @@
 """
-MDK (MKControl Development Kit) — Hermes Agent 插件
+MDK (MKControl Development Kit) — Hermes Agent 插件 v2
+适配新的按需加载知识库结构
 """
 
-import os
 import re
 from pathlib import Path
 
@@ -39,11 +39,10 @@ def _find_protocol(name: str) -> Path | None:
 def register(ctx):
     """Hermes 插件注册入口"""
 
-    # 注册 SKILL.md 文件
-    for skill_name in ["mkcontrol", "protocol", "cht-ref", "xml-ref"]:
-        skill_path = MDK_CORE / "skills" / skill_name / "SKILL.md"
-        if skill_path.exists():
-            ctx.register_skill(str(skill_path))
+    # 注册唯一 SKILL.md
+    skill_path = MDK_CORE / "skills" / "mkcontrol" / "SKILL.md"
+    if skill_path.exists():
+        ctx.register_skill(str(skill_path))
 
     @ctx.register_tool(
         name="protocol_list",
@@ -56,8 +55,7 @@ def register(ctx):
         }
     )
     def protocol_list(filter: str = "") -> dict:
-        index_path = PROTOCOLS_DIR / "_index.md"
-        content = _read(index_path)
+        content = _read(PROTOCOLS_DIR / "_index.md")
         if filter:
             lines = [l for l in content.splitlines() if filter.lower() in l.lower()]
             content = "\n".join(lines) if lines else f"未找到包含 '{filter}' 的协议"
@@ -91,15 +89,19 @@ def register(ctx):
         }
     )
     def cht_patterns(pattern: str = "") -> dict:
-        content = _read(REFERENCES_DIR / "core" / "code-patterns.md")
+        patterns_dir = REFERENCES_DIR / "core" / "patterns"
         if not pattern:
-            headers = [l for l in content.splitlines() if l.startswith("## 模式")]
-            return {"content": "## 代码模式总览\n\n" + "\n".join(headers)}
-        sections = re.split(r"(?=^## 模式)", content, flags=re.MULTILINE)
-        for section in sections:
-            if pattern.lower() in section.lower():
-                return {"content": section}
-        return {"content": f"未找到模式：{pattern}\n\n" + content[:500]}
+            return {"content": _read(patterns_dir / "_index.md")}
+        # 在索引中找匹配的文件
+        index = _read(patterns_dir / "_index.md")
+        for line in index.splitlines():
+            if pattern.lower() in line.lower() and "`" in line:
+                filename = re.search(r'`(\S+\.md)`', line)
+                if filename:
+                    content = _read(patterns_dir / filename.group(1))
+                    if content:
+                        return {"content": content}
+        return {"content": f"未找到模式：{pattern}\n\n" + index}
 
     @ctx.register_tool(
         name="cht_functions",
@@ -112,15 +114,22 @@ def register(ctx):
         }
     )
     def cht_functions(query: str = "") -> dict:
-        func_dir = DOCS_DIR / "系统函数库"
+        func_dir = DOCS_DIR / "系统函数库" / "常用"
+        func_dir_hw = DOCS_DIR / "系统函数库" / "专用硬件"
+        all_dirs = [func_dir, func_dir_hw]
         if not query:
-            files = sorted(func_dir.glob("*.md"))
-            result = "## 系统函数分类\n\n" + "\n".join(f"- {f.stem}" for f in files)
+            result = "## 系统函数分类\n\n### 常用\n"
+            for f in sorted(func_dir.glob("*.md")):
+                result += f"- {f.stem}\n"
+            result += "\n### 专用硬件\n"
+            for f in sorted(func_dir_hw.glob("*.md")):
+                result += f"- {f.stem}\n"
             return {"content": result}
-        for func_file in sorted(func_dir.glob("*.md")):
-            content = _read(func_file)
-            if query.lower() in func_file.stem.lower() or query.upper() in content:
-                return {"content": content[:3000]}
+        for d in all_dirs:
+            for func_file in sorted(d.glob("*.md")):
+                content = _read(func_file)
+                if query.lower() in func_file.stem.lower() or query.upper() in content:
+                    return {"content": content[:3000]}
         return {"content": f"未找到：{query}"}
 
     @ctx.register_tool(
@@ -134,13 +143,15 @@ def register(ctx):
         }
     )
     def xml_controls(control_type: str = "") -> dict:
-        content = _read(REFERENCES_DIR / "controls" / "controls-spec.md")
+        widgets_dir = REFERENCES_DIR / "controls" / "widgets"
         if not control_type:
-            return {"content": content[:2000] + "\n...（使用 xml_controls DFCButton 等查看详情）"}
-        sections = re.split(r"(?=^## \d+\.)", content, flags=re.MULTILINE)
-        for section in sections:
-            if control_type.upper() in section.upper():
-                return {"content": section}
+            return {"content": _read(widgets_dir / "_index.md")}
+        # 查找匹配的控件文件
+        for f in widgets_dir.glob("*.md"):
+            if f.name == "_index.md":
+                continue
+            if control_type.lower() in f.stem.lower():
+                return {"content": _read(f)}
         return {"content": f"未找到控件：{control_type}"}
 
     @ctx.register_tool(

@@ -1,5 +1,7 @@
 import base64
 import hashlib
+import logging
+import time
 from typing import Any
 
 from cryptography.fernet import Fernet, InvalidToken
@@ -9,6 +11,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..config import settings
 from ..models.llm_config import LlmConfig
+
+logger = logging.getLogger(__name__)
 
 
 def _cipher() -> Fernet:
@@ -50,7 +54,7 @@ async def get_config_by_id(db: AsyncSession, config_id: int) -> LlmConfig | None
 
 
 def _build_litellm_params(config: LlmConfig) -> dict[str, Any]:
-    model = config.model if "/" in config.model else f"{config.provider}/{config.model}"
+    model = f"{config.provider}/{config.model}"
     params: dict[str, Any] = {"model": model}
     if config.api_base:
         params["api_base"] = config.api_base
@@ -71,7 +75,32 @@ async def llm_chat(
     params.update(messages=messages, stream=stream, temperature=temperature)
     if response_format:
         params["response_format"] = response_format
-    return await litellm.acompletion(**params)
+
+    total_chars = sum(len(m.get("content", "")) for m in messages)
+    logger.info("[LLM] 调用 → model=%s, stream=%s", params["model"], stream)
+    logger.debug("[LLM] 详情 → messages=%d, input~%d chars, temp=%.1f, response_format=%s",
+                 len(messages), total_chars, temperature, response_format)
+    t0 = time.perf_counter()
+    try:
+        result = await litellm.acompletion(**params)
+        elapsed = time.perf_counter() - t0
+        if not stream and result.choices:
+            resp_len = len(result.choices[0].message.content or "")
+            usage = getattr(result, "usage", None)
+            if usage:
+                logger.info("[LLM] 完成 ← %.1fs, %d tokens (prompt=%d, completion=%d)",
+                            elapsed, usage.total_tokens, usage.prompt_tokens, usage.completion_tokens)
+            else:
+                logger.info("[LLM] 完成 ← %.1fs, response=%d chars", elapsed, resp_len)
+            logger.debug("[LLM] 响应预览: %.200s", result.choices[0].message.content or "")
+        else:
+            logger.info("[LLM] stream 已打开 ← %.1fs", elapsed)
+        return result
+    except Exception as exc:
+        elapsed = time.perf_counter() - t0
+        logger.error("[LLM] 失败 ← %.1fs: %s", elapsed, exc)
+        logger.debug("[LLM] 错误堆栈:", exc_info=True)
+        raise
 
 
 async def test_connection(config: LlmConfig) -> tuple[bool, str]:
@@ -86,5 +115,5 @@ async def test_connection(config: LlmConfig) -> tuple[bool, str]:
         if not content:
             return False, "Connected but model returned empty response"
         return True, content[:200]
-    except Exception:
-        return False, "Connection test failed"
+    except Exception as e:
+        return False, f"Connection test failed: {e}"

@@ -1,16 +1,13 @@
 {
   "id": "mdk-mkcontrol",
   "name": "MKControl Development Kit",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "MKControl 中控系统开发工具链：生成 Project.xml + .cht，管理设备协议库，查询语言规范",
   "author": "MDK",
   "license": "MIT",
   "main": "./index.ts",
   "skills": [
-    "./skills/mkcontrol",
-    "./skills/protocol",
-    "./skills/cht-ref",
-    "./skills/xml-ref"
+    "../../core/skills/mkcontrol"
   ],
   "keywords": ["mkcontrol", "中控", "自动化", "会议室", "智能控制"],
   "repository": ""

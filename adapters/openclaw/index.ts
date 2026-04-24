@@ -1,6 +1,6 @@
 /**
- * MDK (MKControl Development Kit) — OpenClaw 插件
- * 注册 15 个工具，引用 core/ 知识库提供中控开发辅助
+ * MDK (MKControl Development Kit) — OpenClaw 插件 v2
+ * 适配新的按需加载知识库结构
  */
 
 import { definePluginEntry, type PluginContext } from "@openclaw/sdk";
@@ -16,21 +16,17 @@ function readFile(filePath: string): string {
   try {
     return fs.readFileSync(filePath, "utf-8");
   } catch {
-    try {
-      return fs.readFileSync(filePath, "gbk" as BufferEncoding);
-    } catch {
-      return `[文件不存在: ${filePath}]`;
-    }
+    return `[文件不存在: ${filePath}]`;
   }
 }
 
 function findProtocolFile(name: string): string | null {
   const nameLower = name.toLowerCase().replace(/[\s_]/g, "-");
-  const dirs = fs.readdirSync(PROTOCOLS_DIR, { withFileTypes: true })
+  const categories = fs.readdirSync(PROTOCOLS_DIR, { withFileTypes: true })
     .filter((d) => d.isDirectory())
     .map((d) => d.name);
 
-  for (const dir of dirs) {
+  for (const dir of categories) {
     const dirPath = path.join(PROTOCOLS_DIR, dir);
     const files = fs.readdirSync(dirPath).filter((f) => f.endsWith(".md") && !f.startsWith("_"));
     for (const file of files) {
@@ -42,16 +38,28 @@ function findProtocolFile(name: string): string | null {
   return null;
 }
 
+function findPatternFile(keyword: string): string | null {
+  const patternsDir = path.join(REFERENCES_DIR, "core", "patterns");
+  const index = readFile(path.join(patternsDir, "_index.md"));
+  for (const line of index.split("\n")) {
+    if (line.toLowerCase().includes(keyword.toLowerCase())) {
+      const match = line.match(/`(\S+\.md)`/);
+      if (match) {
+        const filePath = path.join(patternsDir, match[1]);
+        if (fs.existsSync(filePath)) return filePath;
+      }
+    }
+  }
+  return null;
+}
+
 export default definePluginEntry({
   name: "mdk-mkcontrol",
-  version: "1.0.0",
+  version: "2.0.0",
 
   setup(ctx: PluginContext) {
-    // 注册 Skill 文件
+    // 注册唯一 Skill
     ctx.registerSkill(path.join(MDK_CORE, "skills", "mkcontrol", "SKILL.md"));
-    ctx.registerSkill(path.join(MDK_CORE, "skills", "protocol", "SKILL.md"));
-    ctx.registerSkill(path.join(MDK_CORE, "skills", "cht-ref", "SKILL.md"));
-    ctx.registerSkill(path.join(MDK_CORE, "skills", "xml-ref", "SKILL.md"));
 
     // 协议列表
     ctx.registerTool({
@@ -61,8 +69,7 @@ export default definePluginEntry({
         filter: { type: "string", description: "过滤关键词", default: "" },
       },
       handler: async ({ filter }) => {
-        const indexPath = path.join(PROTOCOLS_DIR, "_index.md");
-        let content = readFile(indexPath);
+        let content = readFile(path.join(PROTOCOLS_DIR, "_index.md"));
         if (filter) {
           const lines = content.split("\n").filter((l) => l.toLowerCase().includes(filter.toLowerCase()));
           content = lines.join("\n") || `未找到包含 '${filter}' 的协议`;
@@ -80,14 +87,12 @@ export default definePluginEntry({
       },
       handler: async ({ name }) => {
         const filePath = findProtocolFile(name);
-        if (filePath) {
-          return { content: readFile(filePath) };
-        }
+        if (filePath) return { content: readFile(filePath) };
         return { content: `未找到协议：${name}。请用 protocol_add 添加。` };
       },
     });
 
-    // CHT 代码模式
+    // CHT 代码模式（按需加载拆分文件）
     ctx.registerTool({
       name: "cht_patterns",
       description: "查询 .cht 常见代码模式",
@@ -95,16 +100,15 @@ export default definePluginEntry({
         pattern: { type: "string", description: "模式关键词", default: "" },
       },
       handler: async ({ pattern }) => {
-        const filePath = path.join(REFERENCES_DIR, "core", "code-patterns.md");
-        const content = readFile(filePath);
-        if (!pattern) return { content };
-        const sections = content.split(/(?=^## 模式)/m);
-        const matched = sections.find((s) => s.toLowerCase().includes(pattern.toLowerCase()));
-        return { content: matched || content.substring(0, 1000) };
+        const patternsDir = path.join(REFERENCES_DIR, "core", "patterns");
+        if (!pattern) return { content: readFile(path.join(patternsDir, "_index.md")) };
+        const filePath = findPatternFile(pattern);
+        if (filePath) return { content: readFile(filePath) };
+        return { content: readFile(path.join(patternsDir, "_index.md")) };
       },
     });
 
-    // XML 控件规范
+    // XML 控件规范（按需加载拆分文件）
     ctx.registerTool({
       name: "xml_controls",
       description: "查询 Project.xml 控件类型和属性规范",
@@ -112,12 +116,13 @@ export default definePluginEntry({
         control_type: { type: "string", description: "控件类型（如 DFCButton）", default: "" },
       },
       handler: async ({ control_type }) => {
-        const filePath = path.join(REFERENCES_DIR, "controls", "controls-spec.md");
-        const content = readFile(filePath);
-        if (!control_type) return { content: content.substring(0, 2000) };
-        const sections = content.split(/(?=^## \d+\.)/m);
-        const matched = sections.find((s) => s.toUpperCase().includes(control_type.toUpperCase()));
-        return { content: matched || `未找到控件：${control_type}` };
+        const widgetsDir = path.join(REFERENCES_DIR, "controls", "widgets");
+        if (!control_type) return { content: readFile(path.join(widgetsDir, "_index.md")) };
+        // 查找匹配文件
+        const files = fs.readdirSync(widgetsDir).filter((f) => f !== "_index.md" && f.endsWith(".md"));
+        const match = files.find((f) => f.toLowerCase().includes(control_type.toLowerCase()));
+        if (match) return { content: readFile(path.join(widgetsDir, match)) };
+        return { content: `未找到控件：${control_type}` };
       },
     });
 
@@ -127,8 +132,7 @@ export default definePluginEntry({
       description: "查询 .cht 语言语法约束规则",
       parameters: {},
       handler: async () => {
-        const filePath = path.join(REFERENCES_DIR, "core", "syntax-rules.md");
-        return { content: readFile(filePath) };
+        return { content: readFile(path.join(REFERENCES_DIR, "core", "syntax-rules.md")) };
       },
     });
   },

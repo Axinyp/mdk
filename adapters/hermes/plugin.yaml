@@ -1,5 +1,5 @@
 name: mdk-mkcontrol
-version: "1.0.0"
+version: "2.0.0"
 description: "MKControl Development Kit — 中控系统开发工具链"
 author: MDK
 license: MIT
@@ -7,9 +7,6 @@ entry: __init__.py
 
 skills:
   - path: ../../core/skills/mkcontrol/SKILL.md
-  - path: ../../core/skills/protocol/SKILL.md
-  - path: ../../core/skills/cht-ref/SKILL.md
-  - path: ../../core/skills/xml-ref/SKILL.md
 
 tools:
   - name: protocol_list

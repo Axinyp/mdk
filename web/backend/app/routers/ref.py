@@ -32,12 +32,18 @@ async def cht_functions(query: str = ""):
 
 @router.get("/cht/patterns")
 async def cht_patterns(keyword: str = ""):
-    return {"content": knowledge.get_patterns(keyword)}
+    if not keyword:
+        return {"content": knowledge.get_patterns_index()}
+    content = knowledge.get_pattern(keyword)
+    return {"content": content if content else knowledge.get_patterns_index()}
 
 
 @router.get("/xml/controls")
 async def xml_controls(type: str = Query("", alias="type")):
-    return {"content": knowledge.get_controls_spec(type)}
+    if not type:
+        return {"content": knowledge.get_controls_index()}
+    content = knowledge.get_control_spec(type)
+    return {"content": content if content else f"未找到控件: {type}"}
 
 
 @router.get("/xml/structure")

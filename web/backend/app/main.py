@@ -1,12 +1,23 @@
+import logging
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
+
+from .config import settings as _settings
+
+logging.basicConfig(
+    level=logging.DEBUG if _settings.debug else logging.INFO,
+    format="%(asctime)s %(levelname)-7s [%(name)s] %(message)s",
+    datefmt="%H:%M:%S",
+)
+# 第三方库降噪
+for _name in ("httpx", "httpcore", "urllib3", "asyncio", "watchfiles", "LiteLLM"):
+    logging.getLogger(_name).setLevel(logging.WARNING)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
-from .config import settings
 from .database import Base, async_session, engine
 from .models import GenSession, LlmConfig, Protocol, Setting, User
 from .services.auth import hash_password
@@ -69,11 +80,11 @@ async def lifespan(app: FastAPI):
     await engine.dispose()
 
 
-app = FastAPI(title=settings.app_name, lifespan=lifespan)
+app = FastAPI(title=_settings.app_name, lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins,
+    allow_origins=_settings.cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -90,4 +101,4 @@ app.include_router(ref.router)
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "app": settings.app_name}
+    return {"status": "ok", "app": _settings.app_name}

@@ -86,21 +86,28 @@ def allocate(functions: list[FunctionItem]) -> list[FunctionItem]:
     used: set[int] = set()
     result: list[FunctionItem] = []
 
+    # Pass 1: lock all user-specified joins (allow sharing, e.g. light on/off = same join)
     for func in functions:
         if func.join_source == "user_specified" and func.join_number > 0:
-            if func.join_number in used:
-                raise ValueError(f"Duplicate JoinNumber: {func.join_number}")
             used.add(func.join_number)
             result.append(func.model_copy())
         else:
             result.append(func.model_copy(update={"join_source": "auto", "join_number": 0}))
 
+    # Pass 2: auto-assign remaining, grouping same-device functions to share one join
+    device_join: dict[str, int] = {}
     for i, func in enumerate(result):
         if func.join_number > 0:
             continue
         category = _guess_category(func)
-        join_number = _next_available(category, used)
-        used.add(join_number)
+        group_key = f"{category}:{func.device}" if func.device else ""
+        if group_key and group_key in device_join:
+            join_number = device_join[group_key]
+        else:
+            join_number = _next_available(category, used)
+            used.add(join_number)
+            if group_key:
+                device_join[group_key] = join_number
         result[i] = func.model_copy(update={"join_number": join_number, "join_source": "auto"})
 
     return result
