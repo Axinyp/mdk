@@ -47,10 +47,12 @@ reset_others 格式: `            SET_BUTTON(tp, {{other_join}}, 0);`
     LEVEL_EVENT(tp, {{join}})
     {
         int val;
-        val = GET_LEVEL(tp, {{join}});
+        val = LEVEL.Value;
         {{action}};
     }
 ```
+注意：LEVEL_EVENT 内部通过 LEVEL 对象访问属性，不存在 GET_LEVEL 函数。
+可用属性：LEVEL.Value（滑条值）、LEVEL.JoinNumber（通道号）、LEVEL.Channel、LEVEL.DeviceID。
 
 ## DATA_EVENT 串口回传
 ```

@@ -62,7 +62,7 @@ export default function SessionDetail() {
 
   if (loading) return <div className="text-center py-12 text-neutral-400">加载中...</div>
   if (error || !session) return (
-    <div className="max-w-4xl mx-auto text-center py-12">
+    <div className="max-w-6xl mx-auto text-center py-12">
       <p className="text-red-500 mb-4">{error || '会话不存在'}</p>
       <button onClick={() => navigate('/history')} className="text-sm text-blue-600 hover:underline">返回历史</button>
     </div>
@@ -114,7 +114,7 @@ export default function SessionDetail() {
   const summary = report?.summary || { critical: 0, warning: 0 }
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div>

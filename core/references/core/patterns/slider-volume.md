@@ -29,7 +29,7 @@ DEFINE_FUNCTION
 DEFINE_EVENT
     LEVEL_EVENT(tp, SLIDER_VOL)
     {
-        currentVol = GET_LEVEL(tp, SLIDER_VOL);
+        currentVol = LEVEL.Value;
         SendVolume(currentVol);
     }
 ```

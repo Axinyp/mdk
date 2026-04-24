@@ -36,7 +36,7 @@ export default function History() {
   if (loading) return <div className="text-center py-12 text-neutral-400">加载中...</div>
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       <h1 className="text-xl font-semibold text-neutral-900 mb-6">生成历史</h1>
       {sessions.length === 0 ? (
         <div className="text-center py-12 text-neutral-400">

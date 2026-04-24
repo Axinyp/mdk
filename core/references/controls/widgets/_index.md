@@ -41,7 +41,7 @@
 | 通道 | 方向 | 控件 | CHT 函数 |
 |------|------|------|----------|
 | 按钮事件 | 屏→控 | DFCButton.JN | `BUTTON_EVENT(tp,N){PUSH(){}}` |
-| 滑条事件 | 屏→控 | DFCSlider.JN | `LEVEL_EVENT(tp,N){val=GET_LEVEL(tp,N);}` |
+| 滑条事件 | 屏→控 | DFCSlider.JN | `LEVEL_EVENT(tp,N){val=LEVEL.Value;}` |
 | 按钮反馈 | 控→屏 | DFCButton.JN | `SET_BUTTON(tp,N,1/0)` |
 | 文本反馈 | 控→屏 | DFCTextbox.JN | `SEND_TEXT(tp,N,"文字")` |
 | 滑条反馈 | 控→屏 | DFCSlider/DFCProgress.JN | `SET_LEVEL(tp,N,值)` |

@@ -106,7 +106,7 @@ export default function Generator() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div className="max-w-6xl mx-auto">
       {/* Step indicator */}
       <div className="flex items-center gap-2 mb-6">
         {['描述需求', '确认清单', '生成中', '查看结果'].map((label, i) => {

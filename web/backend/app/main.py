@@ -1,18 +1,11 @@
-import logging
 import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
 from .config import settings as _settings
+from . import log
 
-logging.basicConfig(
-    level=logging.DEBUG if _settings.debug else logging.INFO,
-    format="%(asctime)s %(levelname)-7s [%(name)s] %(message)s",
-    datefmt="%H:%M:%S",
-)
-# 第三方库降噪
-for _name in ("httpx", "httpcore", "urllib3", "asyncio", "watchfiles", "LiteLLM"):
-    logging.getLogger(_name).setLevel(logging.WARNING)
+log.setup(debug=_settings.debug)
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

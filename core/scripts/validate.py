@@ -60,7 +60,7 @@ SYSTEM_APIS = [
     "GET_HOUR", "GET_MINUTE", "GET_SECOND",
     "TRACE", "GET_VER_INFO", "RANDOM_NUMBER",
     "SEND_LITE", "SEND_DMX", "SET_VOL_M", "GET_VOL_M",
-    "SET_MATRIX_M", "GET_MATRIX_M", "GET_LEVEL",
+    "SET_MATRIX_M", "GET_MATRIX_M",
 ]
 
 VALID_ELEMENT_TYPES = {'RELAY', 'COM', 'TP', 'IR', 'IO', 'LITE', 'VOL', 'WM', 'DMX512'}
@@ -211,7 +211,6 @@ def validate(filepath):
         r'SEND_TEXT\s*\(\s*(\w+)\s*,',
         r'SEND_PICTURE\s*\(\s*(\w+)\s*,',
         r'SEND_PAGING\s*\(\s*(\w+)\s*,',
-        r'GET_LEVEL\s*\(\s*(\w+)\s*,',
     ]:
         for m in re.finditer(pattern_str, check_code):
             device_refs.add(m.group(1))
