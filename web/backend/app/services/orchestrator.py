@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 import time
 import traceback
 import uuid
@@ -112,7 +113,7 @@ async def stage_confirm(db: AsyncSession, session_id: str, confirmed: ParsedData
 async def stage_generate(db: AsyncSession, session_id: str) -> AsyncGenerator[str, None]:
     t_total = time.perf_counter()
     logger.info("[FLOW] ===== 生成阶段开始 session=%s =====", session_id[:8])
-    session = await _transition(db, session_id, {"confirmed"}, "generating")
+    session = await _transition(db, session_id, {"confirmed", "error"}, "generating")
 
     config = await get_default_config(db)
     if not config:
@@ -159,7 +160,11 @@ async def stage_generate(db: AsyncSession, session_id: str) -> AsyncGenerator[st
         yield _sse("status", "正在生成 .cht 文件...")
 
         logger.debug("[PROMPT] 构建 CHT prompt...")
-        cht_messages = prompt_builder.build_cht_prompt(confirmed, functions_with_joins, matched_protocols, matched_patterns)
+        cht_messages = prompt_builder.build_cht_prompt(
+            confirmed, functions_with_joins, matched_protocols, matched_patterns,
+            project_title=session.title or "",
+            project_description=session.description or "",
+        )
         logger.debug("[PROMPT] CHT prompt 就绪, 消息数=%d", len(cht_messages))
 
         cht_resp = await llm_chat(messages=cht_messages, config=config, stream=False, temperature=0.0)
@@ -196,14 +201,45 @@ async def stage_generate(db: AsyncSession, session_id: str) -> AsyncGenerator[st
         yield _sse("error", f"Generate stage failed: {exc!r}\n{traceback.format_exc()}")
 
 
+def _sanitize_json(text: str) -> str:
+    """Escape literal control characters inside JSON string values."""
+    _ESC = {'\n': '\\n', '\r': '\\r', '\t': '\\t', '\b': '\\b', '\f': '\\f'}
+    result: list[str] = []
+    in_string = False
+    i = 0
+    while i < len(text):
+        c = text[i]
+        if c == '\\' and in_string:
+            result.append(c)
+            i += 1
+            if i < len(text):
+                result.append(text[i])
+            i += 1
+            continue
+        if c == '"':
+            in_string = not in_string
+        if in_string and ord(c) < 0x20:
+            result.append(_ESC.get(c, f'\\u{ord(c):04x}'))
+        else:
+            result.append(c)
+        i += 1
+    return ''.join(result)
+
+
 def _extract_json(text: str) -> dict:
-    text = text.strip()
+    text = text.strip().lstrip('﻿')
     if text.startswith("```"):
         lines = text.splitlines()
         start = 1
         end = next((i for i in range(len(lines) - 1, 0, -1) if lines[i].strip() == "```"), len(lines))
         text = "\n".join(lines[start:end])
-    return json.loads(text)
+    # Remove control chars that are never valid in JSON (keep \t \n \r)
+    text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        # Escape literal \n \r \t inside string values
+        return json.loads(_sanitize_json(text))
 
 
 def _strip_fence(text: str) -> str:

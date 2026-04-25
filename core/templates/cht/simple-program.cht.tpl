@@ -1,3 +1,4 @@
+{{project_header}}
 DEFINE_DEVICE
 //在这里添加要定义的设备
 {{device_block}}

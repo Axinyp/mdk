@@ -90,6 +90,40 @@ DEFINE_EVENT
     }
 ```
 
+## 多 IR 设备同步控制（多台空调同步）
+
+当需要同时控制多台 IR 设备（如两个 TR-0740S 的红外口），**每个设备都必须有完整的 if-else 链**，禁止对任一设备使用字符串拼接。
+
+```
+DEFINE_DEVICE
+    TR_0740S_IR1 = L:2:IR;
+    TR_0740S_IR2 = L:3:IR;
+    tp = T:10:TP;
+
+DEFINE_FUNCTION
+    void SendAcTemp(int temp)
+    {
+        // IR设备1 — 完整 if-else 链
+        if (temp == 16) { SEND_IRCODE(TR_0740S_IR1, 1, IRCODE<"UserIRDB:room:brand:model:ts:16_1">); }
+        else if (temp == 17) { SEND_IRCODE(TR_0740S_IR1, 1, IRCODE<"UserIRDB:room:brand:model:ts:17_1">); }
+        // ... 18-29 ...
+        else if (temp == 30) { SEND_IRCODE(TR_0740S_IR1, 1, IRCODE<"UserIRDB:room:brand:model:ts:30_1">); }
+
+        // IR设备2 — 同样必须完整 if-else 链，禁止用拼接
+        if (temp == 16) { SEND_IRCODE(TR_0740S_IR2, 1, IRCODE<"UserIRDB:room:brand:model:ts:16_1">); }
+        else if (temp == 17) { SEND_IRCODE(TR_0740S_IR2, 1, IRCODE<"UserIRDB:room:brand:model:ts:17_1">); }
+        // ... 18-29 ...
+        else if (temp == 30) { SEND_IRCODE(TR_0740S_IR2, 1, IRCODE<"UserIRDB:room:brand:model:ts:30_1">); }
+
+        SEND_TEXT(tp, 300, ITOA(temp));
+    }
+```
+
+⚠️ 常见错误：对第二个设备使用拼接"偷懒"：
+```
+SEND_IRCODE(TR_0740S_IR2, 1, IRCODE<"UserIRDB:..." + ITOA(temp) + "_1">);  // ❌ 编译报错
+```
+
 ## UserIRDB 码格式说明
 
 格式：`UserIRDB:{group}:{subgroup}:{brand}:{learning_timestamp}:{instruction_id}`

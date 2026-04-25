@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import api from '../api/client'
+import ConfirmationView from '../components/ConfirmationView'
 
 interface SessionData {
   id: string
@@ -45,7 +46,12 @@ export default function SessionDetail() {
   const [activeStep, setActiveStep] = useState<string>('description')
   const [codeTab, setCodeTab] = useState<'xml' | 'cht'>('xml')
 
-  useEffect(() => {
+  // Resume states
+  const [resumeMode, setResumeMode] = useState(false)
+  const [generating, setGenerating] = useState(false)
+  const [genStatus, setGenStatus] = useState('')
+
+  const fetchSession = () => {
     if (!id) return
     api.get(`/gen/sessions/${id}`)
       .then(({ data }) => {
@@ -58,21 +64,36 @@ export default function SessionDetail() {
       })
       .catch((err: any) => setError(err.response?.data?.detail || '加载失败'))
       .finally(() => setLoading(false))
-  }, [id])
+  }
+
+  useEffect(() => { fetchSession() }, [id])
 
   if (loading) return <div className="text-center py-12 text-neutral-400">加载中...</div>
-  if (error || !session) return (
+  if (error && !session) return (
     <div className="max-w-6xl mx-auto text-center py-12">
-      <p className="text-red-500 mb-4">{error || '会话不存在'}</p>
+      <p className="text-red-500 mb-4">{error}</p>
       <button onClick={() => navigate('/history')} className="text-sm text-blue-600 hover:underline">返回历史</button>
     </div>
   )
+  if (!session) return null
 
   const st = STATUS_MAP[session.status] || STATUS_MAP.created
   const parsed = session.parsed_data ? JSON.parse(session.parsed_data) : null
   const confirmed = session.confirmed_data ? JSON.parse(session.confirmed_data) : null
   const joins = session.join_registry ? JSON.parse(session.join_registry) : null
   const report = session.validation_report ? JSON.parse(session.validation_report) : null
+
+  // Determine what resume actions are available
+  const canResume = session.status === 'parsed' || session.status === 'confirmed' || session.status === 'error'
+  const resumeLabel = (() => {
+    if (session.status === 'parsed') return '继续确认'
+    if (session.status === 'confirmed') return '继续生成'
+    if (session.status === 'error') {
+      if (confirmed) return '重新生成'
+      if (parsed) return '重新确认'
+    }
+    return ''
+  })()
 
   const stepAvailable = (key: string) => {
     switch (key) {
@@ -111,6 +132,86 @@ export default function SessionDetail() {
     URL.revokeObjectURL(url)
   }
 
+  const handleResume = () => {
+    if (session.status === 'parsed') {
+      setResumeMode(true)
+      setActiveStep('parsed')
+    } else if (session.status === 'confirmed' || (session.status === 'error' && confirmed)) {
+      handleGenerate()
+    } else if (session.status === 'error' && parsed) {
+      setResumeMode(true)
+      setActiveStep('parsed')
+    }
+  }
+
+  const handleConfirm = async (data: any) => {
+    setError('')
+    setGenerating(true)
+    setGenStatus('正在确认...')
+    setResumeMode(false)
+    try {
+      await api.post(`/gen/sessions/${session.id}/confirm`, { data })
+      await runGenerate()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || '确认失败')
+      setGenerating(false)
+    }
+  }
+
+  const handleGenerate = async () => {
+    setError('')
+    setGenerating(true)
+    setGenStatus('正在生成...')
+    try {
+      await runGenerate()
+    } catch (err: any) {
+      setError(err.response?.data?.detail || '生成失败')
+      setGenerating(false)
+    }
+  }
+
+  const runGenerate = async () => {
+    setActiveStep('generated')
+    const response = await fetch(`/api/gen/sessions/${session.id}/generate`, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${localStorage.getItem('token')}`,
+        'Content-Type': 'application/json',
+      },
+    })
+
+    const reader = response.body?.getReader()
+    const decoder = new TextDecoder()
+    if (!reader) throw new Error('No stream')
+
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      const text = decoder.decode(value)
+      for (const line of text.split('\n')) {
+        if (line.startsWith('event: ')) {
+          const event = line.replace('event: ', '')
+          if (event === 'error') {
+            setError('生成失败')
+            setGenerating(false)
+            return
+          }
+        }
+        if (line.startsWith('data: ')) {
+          try {
+            const payload = JSON.parse(line.replace('data: ', ''))
+            if (typeof payload === 'string') setGenStatus(payload)
+            else setGenStatus(JSON.stringify(payload))
+          } catch { /* skip */ }
+        }
+      }
+    }
+
+    setGenerating(false)
+    setGenStatus('')
+    fetchSession()
+  }
+
   const summary = report?.summary || { critical: 0, warning: 0 }
 
   return (
@@ -133,13 +234,27 @@ export default function SessionDetail() {
             <span className="ml-3">更新: {new Date(session.updated_at).toLocaleString('zh-CN')}</span>
           </p>
         </div>
-        {session.xml_content && session.cht_content && (
-          <button onClick={handleDownloadZip}
-            className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
-            打包下载
-          </button>
-        )}
+        <div className="flex items-center gap-2">
+          {canResume && !generating && resumeLabel && (
+            <button onClick={handleResume}
+              className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white text-sm font-medium rounded-lg">
+              {resumeLabel}
+            </button>
+          )}
+          {session.xml_content && session.cht_content && (
+            <button onClick={handleDownloadZip}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg">
+              打包下载
+            </button>
+          )}
+        </div>
       </div>
+
+      {error && (
+        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+          {error}
+        </div>
+      )}
 
       <div className="flex gap-6">
         {/* Step nav */}
@@ -175,8 +290,17 @@ export default function SessionDetail() {
 
         {/* Content */}
         <div className="flex-1 min-w-0">
+          {/* Generating overlay */}
+          {generating && (
+            <div className="bg-white rounded-xl shadow-sm border border-neutral-200 p-8 text-center">
+              <div className="animate-spin w-10 h-10 border-4 border-blue-600 border-t-transparent rounded-full mx-auto mb-4" />
+              <p className="text-neutral-700 font-medium">正在生成...</p>
+              <p className="text-sm text-neutral-500 mt-2">{genStatus}</p>
+            </div>
+          )}
+
           {/* Description */}
-          {activeStep === 'description' && (
+          {!generating && activeStep === 'description' && (
             <div className="bg-white rounded-xl border border-neutral-200 p-5">
               <h3 className="text-sm font-semibold text-neutral-900 mb-3">需求描述</h3>
               <p className="text-sm text-neutral-700 whitespace-pre-wrap leading-relaxed">
@@ -185,40 +309,48 @@ export default function SessionDetail() {
             </div>
           )}
 
-          {/* Parsed data */}
-          {activeStep === 'parsed' && parsed && (
-            <div className="space-y-4">
-              <ReadOnlyTable
-                title="设备清单"
-                columns={['设备名', '类型', '编号', '通信方式']}
-                rows={parsed.devices?.map((d: any) => [d.name, d.type, d.board, d.comm]) || []}
+          {/* Parsed data - editable when resuming */}
+          {!generating && activeStep === 'parsed' && parsed && (
+            resumeMode ? (
+              <ConfirmationView
+                data={parsed}
+                onConfirm={handleConfirm}
+                onReParse={() => setResumeMode(false)}
               />
-              <ReadOnlyTable
-                title="功能清单"
-                columns={['功能', 'Join', '来源', '控件类型', '按钮类型', '设备']}
-                rows={parsed.functions?.map((f: any) => [
-                  f.name, f.join_number, f.join_source === 'user_specified' ? '用户指定' : '自动',
-                  f.control_type, f.btn_type || '-', f.device || '-',
-                ]) || []}
-              />
-              <ReadOnlyTable
-                title="页面结构"
-                columns={['页面名', '类型']}
-                rows={parsed.pages?.map((p: any) => [p.name, p.type]) || []}
-              />
-              {parsed.missing_info?.length > 0 && (
-                <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
-                  <p className="text-sm font-medium text-amber-800 mb-1">缺失信息</p>
-                  {parsed.missing_info.map((info: string, i: number) => (
-                    <p key={i} className="text-sm text-amber-700">- {info}</p>
-                  ))}
-                </div>
-              )}
-            </div>
+            ) : (
+              <div className="space-y-4">
+                <ReadOnlyTable
+                  title="设备清单"
+                  columns={['设备名', '类型', '编号', '通信方式']}
+                  rows={parsed.devices?.map((d: any) => [d.name, d.type, d.board, d.comm]) || []}
+                />
+                <ReadOnlyTable
+                  title="功能清单"
+                  columns={['功能', 'Join', '来源', '控件类型', '按钮类型', '设备', '图片']}
+                  rows={parsed.functions?.map((f: any) => [
+                    f.name, f.join_number, f.join_source === 'user_specified' ? '用户指定' : '自动',
+                    f.control_type, f.btn_type || '-', f.device || '-', f.image || '-',
+                  ]) || []}
+                />
+                <ReadOnlyTable
+                  title="页面结构"
+                  columns={['页面名', '类型', '背景图片']}
+                  rows={parsed.pages?.map((p: any) => [p.name, p.type, p.bg_image || '-']) || []}
+                />
+                {parsed.missing_info?.length > 0 && (
+                  <div className="bg-amber-50 border border-amber-200 rounded-lg p-3">
+                    <p className="text-sm font-medium text-amber-800 mb-1">缺失信息</p>
+                    {parsed.missing_info.map((info: string, i: number) => (
+                      <p key={i} className="text-sm text-amber-700">- {info}</p>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )
           )}
 
           {/* Confirmed data */}
-          {activeStep === 'confirmed' && (
+          {!generating && activeStep === 'confirmed' && (
             <div className="space-y-4">
               {confirmed && (
                 <>
@@ -229,8 +361,8 @@ export default function SessionDetail() {
                   />
                   <ReadOnlyTable
                     title="确认的页面"
-                    columns={['页面名', '类型']}
-                    rows={confirmed.pages?.map((p: any) => [p.name, p.type]) || []}
+                    columns={['页面名', '类型', '背景图片']}
+                    rows={confirmed.pages?.map((p: any) => [p.name, p.type, p.bg_image || '-']) || []}
                   />
                 </>
               )}
@@ -248,7 +380,7 @@ export default function SessionDetail() {
           )}
 
           {/* Generated content */}
-          {activeStep === 'generated' && (session.xml_content || session.cht_content) && (
+          {!generating && activeStep === 'generated' && (session.xml_content || session.cht_content) && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
                 <button onClick={() => setCodeTab('xml')}
@@ -291,7 +423,7 @@ export default function SessionDetail() {
           )}
 
           {/* Validation report */}
-          {activeStep === 'validation' && report && (
+          {!generating && activeStep === 'validation' && report && (
             <div className="bg-white rounded-xl border border-neutral-200 p-5 space-y-4">
               <div className="flex items-center gap-4">
                 <h3 className="text-sm font-semibold text-neutral-900">校验报告</h3>
@@ -319,7 +451,7 @@ export default function SessionDetail() {
           )}
 
           {/* Error state */}
-          {session.status === 'error' && report?.details && (
+          {!generating && session.status === 'error' && report?.details && (
             <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-4">
               <p className="text-sm font-medium text-red-800 mb-2">错误信息</p>
               {report.details.map((d: string, i: number) => (

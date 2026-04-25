@@ -107,6 +107,8 @@ def build_cht_prompt(
     functions_with_joins: list[FunctionItem],
     matched_protocols: list[str],
     matched_patterns: list[str],
+    project_title: str = "",
+    project_description: str = "",
 ) -> list[dict]:
     template = _read_template("cht_system.md")
 
@@ -142,9 +144,18 @@ def build_cht_prompt(
         "pages": [p.model_dump() for p in confirmed_data.pages],
     }
 
+    header_info = ""
+    if project_title or project_description:
+        header_info = (
+            f"\n工程信息（用于填充 {{{{project_header}}}} 注释）：\n"
+            f"- 工程名称：{project_title or '未命名'}\n"
+            f"- 需求描述：{project_description[:100] if project_description else '无'}\n"
+        )
+
     user_content = (
         f"根据以下配置生成完整的 .cht 文件：\n\n"
-        f"```json\n{json.dumps(config, ensure_ascii=False, indent=2)}\n```\n\n"
+        f"```json\n{json.dumps(config, ensure_ascii=False, indent=2)}\n```\n"
+        f"{header_info}\n"
         f"基于 CHT 骨架模板填充各 {{{{block}}}} 占位符，输出完整代码。\n"
         f"块顺序：DEFINE_DEVICE → DEFINE_COMBINE → DEFINE_CONSTANT → DEFINE_VARIABLE → "
         f"DEFINE_FUNCTION → DEFINE_TIMER → DEFINE_START → DEFINE_EVENT → DEFINE_PROGRAME\n"

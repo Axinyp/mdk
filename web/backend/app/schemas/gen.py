@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class DeviceItem(BaseModel):
@@ -14,17 +14,24 @@ class DeviceItem(BaseModel):
 class FunctionItem(BaseModel):
     name: str
     join_number: int = 0
-    join_source: str = "auto"
-    control_type: str = "DFCButton"
+    join_source: str | None = "auto"
+    control_type: str | None = "DFCButton"
     btn_type: str | None = "NormalBtn"
-    device: str = ""
+    device: str | None = None
     channel: int | None = None
-    action: str = ""
+    action: str | None = ""
+    image: str | None = None
+
+    @field_validator('device', 'action', 'join_source', 'control_type', mode='before')
+    @classmethod
+    def coerce_none_str(cls, v: object) -> object:
+        return "" if v is None else v
 
 
 class PageItem(BaseModel):
     name: str
     type: str = "sub"
+    bg_image: str | None = None
 
 
 class ParsedData(BaseModel):

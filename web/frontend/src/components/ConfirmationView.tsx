@@ -163,6 +163,7 @@ export default function ConfirmationView({ data, onConfirm, onReParse }: Props) 
                 <th className="px-3 py-2 text-xs font-medium text-neutral-500">来源</th>
                 <th className="px-3 py-2 text-xs font-medium text-neutral-500">控件</th>
                 <th className="px-3 py-2 text-xs font-medium text-neutral-500">设备</th>
+                <th className="px-3 py-2 text-xs font-medium text-neutral-500">图片路径</th>
                 <th className="px-3 py-2 text-xs font-medium text-neutral-500 w-16">操作</th>
               </tr>
             </thead>
@@ -198,6 +199,11 @@ export default function ConfirmationView({ data, onConfirm, onReParse }: Props) 
                       className="w-full px-2 py-1 border border-neutral-200 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                   </td>
                   <td className="px-3 py-2">
+                    <input value={f.image || ''} onChange={(e) => updateFunction(i, 'image', e.target.value)}
+                      placeholder="选填"
+                      className="w-full px-2 py-1 border border-neutral-200 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
+                  </td>
+                  <td className="px-3 py-2">
                     <button onClick={() => removeFunction(i)} className="text-red-400 hover:text-red-600 text-xs">删除</button>
                   </td>
                 </tr>
@@ -219,6 +225,7 @@ export default function ConfirmationView({ data, onConfirm, onReParse }: Props) 
               <tr className="bg-neutral-50 text-left">
                 <th className="px-3 py-2 text-xs font-medium text-neutral-500">页面名</th>
                 <th className="px-3 py-2 text-xs font-medium text-neutral-500">类型</th>
+                <th className="px-3 py-2 text-xs font-medium text-neutral-500">背景图片</th>
                 <th className="px-3 py-2 text-xs font-medium text-neutral-500 w-16">操作</th>
               </tr>
             </thead>
@@ -236,6 +243,11 @@ export default function ConfirmationView({ data, onConfirm, onReParse }: Props) 
                       <option value="dialog">dialog</option>
                       <option value="subpage">subpage</option>
                     </select>
+                  </td>
+                  <td className="px-3 py-2">
+                    <input value={p.bg_image || ''} onChange={(e) => updatePage(i, 'bg_image', e.target.value)}
+                      placeholder="选填"
+                      className="w-full px-2 py-1 border border-neutral-200 rounded text-xs focus:ring-2 focus:ring-blue-500 focus:outline-none" />
                   </td>
                   <td className="px-3 py-2">
                     <button onClick={() => removePage(i)} className="text-red-400 hover:text-red-600 text-xs">删除</button>

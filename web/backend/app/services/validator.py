@@ -54,8 +54,28 @@ async def _run_script(script_name: str, *args: str, timeout: int = 30) -> str:
 
 
 def _parse_report(output: str) -> dict:
-    critical = len(re.findall(r"(?i)\bcritical\b", output))
-    warning = len(re.findall(r"(?i)\bwarning\b", output))
+    # Try to parse the summary count lines first (e.g. "Critical (3 项)" or "Critical: 0 项")
+    # Only count lines that indicate actual issues, not the "0 项" summary lines
+    critical = 0
+    warning = 0
+    for line in output.splitlines():
+        # Match "🔴 Critical (N 项)" — actual issues found
+        m = re.search(r"Critical\s*\((\d+)\s*项\)", line)
+        if m:
+            critical += int(m.group(1))
+            continue
+        # Match "🟡 Warning (N 项)"
+        m = re.search(r"Warning\s*\((\d+)\s*项\)", line)
+        if m:
+            warning += int(m.group(1))
+            continue
+        # Fallback: lines starting with "错误:" from validate.py
+        m = re.search(r"错误:\s*(\d+)", line)
+        if m:
+            critical += int(m.group(1))
+        m = re.search(r"警告:\s*(\d+)", line)
+        if m:
+            warning += int(m.group(1))
     details = [line.strip() for line in output.splitlines() if line.strip()]
     return {"critical": critical, "warning": warning, "details": details[-50:]}
 
