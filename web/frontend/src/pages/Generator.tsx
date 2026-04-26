@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import api from '../api/client'
+import ClarificationCard from '../components/ClarificationCard'
 import ConfirmationView from '../components/ConfirmationView'
 import ResultView from '../components/ResultView'
 
@@ -9,6 +10,7 @@ interface ParsedData {
   pages: any[]
   missing_info: string[]
   image_path: string | null
+  scenes?: any[]
 }
 
 interface ChatMessage {
@@ -52,12 +54,22 @@ export default function Generator() {
   const [genStatus, setGenStatus] = useState('')
   const [error, setError] = useState('')
 
+  const [initialMissingInfo, setInitialMissingInfo] = useState<string[]>([])
+
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [messages])
+
+  // Capture the first missing_info set when entering clarifying for the first time.
+  // Guard with initialMissingInfo.length === 0 so multi-round re-parses don't overwrite it.
+  useEffect(() => {
+    if (sessionStatus === 'clarifying' && parsedData?.missing_info?.length && initialMissingInfo.length === 0) {
+      setInitialMissingInfo(parsedData.missing_info)
+    }
+  }, [sessionStatus, parsedData])
 
   const appendMessage = (msg: ChatMessage) => {
     setMessages(prev => {
@@ -191,6 +203,7 @@ export default function Generator() {
     setInputText('')
     setGenStatus('')
     setError('')
+    setInitialMissingInfo([])
   }
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -203,6 +216,7 @@ export default function Generator() {
   const canSend = inputText.trim().length > 0 && !isThinking &&
     sessionStatus !== 'generating' && sessionStatus !== 'completed'
 
+  const showClarificationCard = sessionStatus === 'clarifying' && (parsedData?.missing_info?.length ?? 0) > 0
   const showConfirmPanel = sessionStatus === 'parsed' && parsedData && !result
   const showResultPanel = sessionStatus === 'completed' && result
   const badge = STATUS_BADGE[sessionStatus] ?? STATUS_BADGE.idle
@@ -288,6 +302,16 @@ export default function Generator() {
           )}
         </div>
 
+        {/* 追问进度卡片 */}
+        {showClarificationCard && (
+          <div className="flex-1 overflow-y-auto">
+            <ClarificationCard
+              currentMissing={parsedData!.missing_info}
+              initialMissing={initialMissingInfo.length > 0 ? initialMissingInfo : parsedData!.missing_info}
+            />
+          </div>
+        )}
+
         {/* 解析结果 / 确认面板 */}
         {showConfirmPanel && (
           <div className="flex-1 overflow-y-auto">
@@ -313,7 +337,7 @@ export default function Generator() {
         )}
 
         {/* 等待状态占位 */}
-        {!showConfirmPanel && !showResultPanel && (
+        {!showClarificationCard && !showConfirmPanel && !showResultPanel && (
           <div className="flex-1 flex flex-col items-center justify-center bg-white border border-slate-200 rounded-xl text-center p-8">
             {sessionStatus === 'idle' && (
               <>
