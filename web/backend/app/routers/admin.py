@@ -1,9 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..models.llm_config import LlmConfig
+from ..models.session import ProtocolSubmission
 from ..models.setting import Setting
 from ..models.user import User
 from ..schemas.admin import (
@@ -13,8 +15,10 @@ from ..schemas.admin import (
     UserCreate, UserUpdate,
 )
 from ..schemas.auth import UserResponse
+from ..schemas.pagination import PagedResponse
 from ..services.auth import hash_password, require_admin, get_current_user
 from ..services.llm import encrypt_api_key, test_connection as llm_test_connection
+from ..services import protocol_ingestion
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -96,6 +100,115 @@ async def test_llm(req: LlmTestRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Provide config_id or provider+model")
     ok, msg = await llm_test_connection(cfg)
     return LlmTestResponse(success=ok, message=msg, model=cfg.model)
+
+
+# ── Protocol Submission Review ────────────────────────────────────────────────
+
+class ApproveRequest(BaseModel):
+    edited_content: str | None = None
+
+
+class RejectRequest(BaseModel):
+    note: str = ""
+
+
+def _sub_to_dict(s: ProtocolSubmission, include_content: bool = False) -> dict:
+    d = {
+        "id": s.id,
+        "session_id": s.session_id,
+        "submitter_id": s.submitter_id,
+        "source_type": s.source_type,
+        "filename": s.filename,
+        "brand": s.brand,
+        "model_name": s.model_name,
+        "review_status": s.review_status,
+        "reviewer_id": s.reviewer_id,
+        "reviewer_note": s.reviewer_note,
+        "approved_protocol_id": s.approved_protocol_id,
+        "created_at": s.created_at.isoformat(),
+        "updated_at": s.updated_at.isoformat(),
+    }
+    if include_content:
+        d["raw_content"] = s.raw_content
+        d["extracted_protocol"] = s.extracted_protocol
+    return d
+
+
+@router.get("/protocol-submissions")
+async def list_submissions(
+    status: str | None = Query(None),
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    db: AsyncSession = Depends(get_db),
+):
+    q = select(ProtocolSubmission).order_by(ProtocolSubmission.created_at.desc())
+    if status:
+        q = q.where(ProtocolSubmission.review_status == status)
+
+    count_result = await db.execute(q)
+    all_items = count_result.scalars().all()
+    total = len(all_items)
+    offset = (page - 1) * page_size
+    items = all_items[offset: offset + page_size]
+
+    return PagedResponse(
+        items=[_sub_to_dict(s) for s in items],
+        total=total,
+        page=page,
+        page_size=page_size,
+    )
+
+
+@router.get("/protocol-submissions/{submission_id}")
+async def get_submission(submission_id: str, db: AsyncSession = Depends(get_db)):
+    sub = await db.get(ProtocolSubmission, submission_id)
+    if not sub:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    return _sub_to_dict(sub, include_content=True)
+
+
+@router.post("/protocol-submissions/{submission_id}/approve")
+async def approve_submission(
+    submission_id: str,
+    req: ApproveRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    sub = await db.get(ProtocolSubmission, submission_id)
+    if not sub:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if sub.review_status not in ("pending_review", "processing"):
+        raise HTTPException(status_code=409, detail=f"Submission already {sub.review_status}")
+
+    proto = await protocol_ingestion.approve(
+        submission=sub,
+        reviewer_id=current_user.id,
+        edited_content=req.edited_content,
+        db=db,
+    )
+    return {"status": "approved", "protocol_id": proto.id}
+
+
+@router.post("/protocol-submissions/{submission_id}/reject")
+async def reject_submission(
+    submission_id: str,
+    req: RejectRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    sub = await db.get(ProtocolSubmission, submission_id)
+    if not sub:
+        raise HTTPException(status_code=404, detail="Submission not found")
+    if sub.review_status not in ("pending_review", "processing"):
+        raise HTTPException(status_code=409, detail=f"Submission already {sub.review_status}")
+
+    await protocol_ingestion.reject(
+        submission=sub,
+        reviewer_id=current_user.id,
+        note=req.note,
+        db=db,
+    )
+    return {"status": "rejected"}
 
 
 async def _clear_default(db: AsyncSession):

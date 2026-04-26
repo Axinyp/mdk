@@ -3,20 +3,20 @@ import json
 import zipfile
 from json import JSONDecodeError
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from fastapi.responses import StreamingResponse
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models.session import GenSession
+from ..models.session import GenSession, ProtocolSubmission
 from ..models.user import User
 from ..schemas.gen import (
     ConfirmRequest, MessageRequest, ParsedData, SessionCreate,
     SessionListItem, SessionMessageResponse, SessionResponse,
 )
 from ..services.auth import get_current_user
-from ..services import conversation_service, orchestrator
+from ..services import conversation_service, orchestrator, protocol_ingestion
 
 router = APIRouter(prefix="/api/gen", tags=["generation"])
 
@@ -189,6 +189,83 @@ async def download_session(
         media_type="application/zip",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/sessions/{session_id}/protocol-submissions", status_code=201)
+async def submit_protocol(
+    session_id: str,
+    brand: str = Form(...),
+    model: str = Form(...),
+    source_type: str = Form(...),
+    raw_content: str | None = Form(None),
+    file: UploadFile | None = File(None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session = await _get_user_session(db, session_id, user.id)
+
+    if source_type == "paste":
+        if not raw_content or len(raw_content.strip()) < 10:
+            raise HTTPException(status_code=400, detail="内容过短，至少需要 10 个字符")
+        content, fname = raw_content.strip(), None
+    elif source_type == "file":
+        if not file:
+            raise HTTPException(status_code=400, detail="未上传文件")
+        size = 0
+        chunks: list[bytes] = []
+        while chunk := await file.read(65536):
+            size += len(chunk)
+            if size > 10 * 1024 * 1024:
+                raise HTTPException(status_code=400, detail="文件超过 10MB 限制")
+            chunks.append(chunk)
+        raw = b"".join(chunks)
+        content = raw.decode("utf-8", errors="replace")
+        fname = file.filename
+    else:
+        raise HTTPException(status_code=400, detail="source_type 必须为 paste 或 file")
+
+    sub = await protocol_ingestion.ingest(
+        raw_content=content,
+        source_type=source_type,
+        brand=brand,
+        model_name=model,
+        filename=fname,
+        session_id=session.id,
+        submitter_id=user.id,
+        db=db,
+    )
+    return {
+        "id": sub.id,
+        "review_status": sub.review_status,
+        "brand": sub.brand,
+        "model_name": sub.model_name,
+    }
+
+
+@router.get("/sessions/{session_id}/protocol-submissions")
+async def list_session_submissions(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    await _get_user_session(db, session_id, user.id)
+    result = await db.execute(
+        select(ProtocolSubmission)
+        .where(ProtocolSubmission.session_id == session_id)
+        .order_by(ProtocolSubmission.created_at.desc())
+    )
+    subs = result.scalars().all()
+    return [
+        {
+            "id": s.id,
+            "source_type": s.source_type,
+            "brand": s.brand,
+            "model_name": s.model_name,
+            "review_status": s.review_status,
+            "created_at": s.created_at.isoformat(),
+        }
+        for s in subs
+    ]
 
 
 async def _get_user_session(db: AsyncSession, session_id: str, user_id: int) -> GenSession:

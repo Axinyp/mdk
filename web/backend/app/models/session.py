@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, func
@@ -48,3 +49,23 @@ class ParseRevision(Base):
     parsed_data: Mapped[str] = mapped_column(Text, nullable=False)
     missing_info: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class ProtocolSubmission(Base):
+    __tablename__ = "protocol_submissions"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    session_id: Mapped[str | None] = mapped_column(String, ForeignKey("gen_sessions.id"), nullable=True, index=True)
+    submitter_id: Mapped[int] = mapped_column(Integer, ForeignKey("users.id"), nullable=False)
+    source_type: Mapped[str] = mapped_column(String, nullable=False)       # paste | file
+    raw_content: Mapped[str] = mapped_column(Text, nullable=False)
+    filename: Mapped[str | None] = mapped_column(String, nullable=True)
+    brand: Mapped[str | None] = mapped_column(String, nullable=True)
+    model_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    extracted_protocol: Mapped[str | None] = mapped_column(Text, nullable=True)
+    review_status: Mapped[str] = mapped_column(String, default="pending_review")
+    reviewer_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewer_note: Mapped[str | None] = mapped_column(Text, nullable=True)
+    approved_protocol_id: Mapped[int | None] = mapped_column(Integer, ForeignKey("protocols.id"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -1,4 +1,5 @@
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -34,12 +35,26 @@ class PageItem(BaseModel):
     bg_image: str | None = None
 
 
+class SceneActionItem(BaseModel):
+    device: str = ""
+    action: str = "RELAY.On"
+    value: str | None = None
+
+
+class SceneModeItem(BaseModel):
+    name: str
+    scene_type: Literal["meeting", "rest", "leave", "custom"] = "custom"
+    trigger_join: int = 0
+    actions: list[SceneActionItem] = []
+
+
 class ParsedData(BaseModel):
     devices: list[DeviceItem] = []
     functions: list[FunctionItem] = []
     pages: list[PageItem] = []
     missing_info: list[str] = []
     image_path: str | None = None
+    scenes: list[SceneModeItem] = []
 
 
 class SessionCreate(BaseModel):

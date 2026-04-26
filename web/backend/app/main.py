@@ -12,7 +12,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import select
 
 from .database import Base, async_session, engine
-from .models import GenSession, LlmConfig, Protocol, Setting, User
+from .models import GenSession, LlmConfig, Protocol, ProtocolSubmission, Setting, User
 from .services.auth import hash_password
 from .services.knowledge import list_protocol_files
 
