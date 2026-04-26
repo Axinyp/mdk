@@ -25,7 +25,7 @@
 python core/scripts/run_ci.py
 ```
 
-- 全部 9/9 → 通过
+- 全部通过 → 通过
 - 有失败 → 查明原因：是知识改错了，还是测试需要同步更新
 
 **注意**：若是正向测试变红，说明改出了新 bug；若是反向测试变红，说明 validate.py 检测规则被删除了。
@@ -57,6 +57,8 @@ python core/scripts/run_ci.py
 | 2026-04-26 | `cht_system.md` | DEFINE_COMBINE 单 TP 必须留空规则 | ✅ 9/9 |
 | 2026-04-26 | `parse_system.md` | 增加规则 9-13：DSP限制、禁重复、TCP/UDP无需声明、命名规则 | ✅ 9/9 |
 | 2026-04-26 | `validate.py` | 新增检查 11-13：GET_LEVEL、IRCODE拼接、COMBINE单TP | ✅ 9/9 |
+| 2026-04-26 | `validate.py` | 修复 DEFINE_COMBINE 检查未覆盖 `[ tp ];` 括号格式，新增 neg-combine-bracket-single-tp 反向测试 | ✅ 10/10 |
+| 2026-04-26 | `parse_system.md` | 新增规则 14：触摸屏（T:N）必须在 devices 中声明 TP 类型设备 | ✅ 10/10 |
 
 ---
 
