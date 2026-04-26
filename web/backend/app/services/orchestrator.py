@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.session import GenSession
 from ..models.setting import Setting
 from ..schemas.gen import ConfirmRequest, FunctionItem, ParsedData
-from . import join_registry, knowledge, prompt_builder, semantic_validator, validator
+from . import conversation_service, join_registry, knowledge, prompt_builder, semantic_validator, validator
 from .llm import get_default_config, llm_chat
 
 
@@ -29,6 +29,7 @@ async def create_session(db: AsyncSession, user_id: int, description: str) -> Ge
     db.add(session)
     await db.commit()
     await db.refresh(session)
+    await conversation_service.add_message(db, session.id, role="user", kind="description", content=description)
     logger.debug("[DB] 新建 session=%s, user=%d", session.id[:8], user_id)
     return session
 
@@ -58,7 +59,7 @@ async def _mark_error(session: GenSession, db: AsyncSession, message: str):
 
 async def stage_parse(db: AsyncSession, session_id: str, description: str) -> ParsedData:
     logger.info("[FLOW] ===== 解析阶段开始 session=%s =====", session_id[:8])
-    session = await _transition(db, session_id, {"created", "error"}, "parsing")
+    session = await _transition(db, session_id, {"created", "error", "clarifying", "parsed"}, "parsing")
 
     config = await get_default_config(db)
     if not config:
@@ -87,10 +88,22 @@ async def stage_parse(db: AsyncSession, session_id: str, description: str) -> Pa
                 parsed.missing_info = []
             parsed.missing_info = list(parsed.missing_info) + [f"[语义告警] {s}" for s in semantic_issues]
 
+        next_status = "clarifying" if parsed.missing_info else "parsed"
         session.parsed_data = json.dumps(parsed.model_dump(), ensure_ascii=False)
         session.llm_model = config.model
         session.title = description[:50]
-        session.status = "parsed"
+        session.status = next_status
+        await conversation_service.save_revision(db, session.id, parsed)
+        if parsed.missing_info:
+            await conversation_service.add_message(
+                db, session.id, role="assistant", kind="clarification",
+                content=conversation_service.format_clarification_question(parsed.missing_info),
+            )
+        else:
+            await conversation_service.add_message(
+                db, session.id, role="assistant", kind="summary",
+                content=_format_parse_summary(parsed),
+            )
         await db.commit()
         logger.debug("[DB] 解析结果已持久化 session=%s", session_id[:8])
         return parsed
@@ -267,3 +280,12 @@ def _strip_fence(text: str) -> str:
 
 def _sse(event: str, data: str) -> str:
     return f"event: {event}\ndata: {data}\n\n"
+
+
+def _format_parse_summary(parsed: ParsedData) -> str:
+    return (
+        f"解析完成。设备 {len(parsed.devices)} 个，"
+        f"功能 {len(parsed.functions)} 个，"
+        f"页面 {len(parsed.pages)} 个。"
+        "如无遗漏信息，可继续确认生成。"
+    )

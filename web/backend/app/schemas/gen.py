@@ -46,6 +46,20 @@ class SessionCreate(BaseModel):
     description: str = Field(min_length=2)
 
 
+class MessageRequest(BaseModel):
+    content: str = Field(min_length=1)
+
+
+class SessionMessageResponse(BaseModel):
+    id: int
+    session_id: str
+    role: str
+    kind: str
+    content: str
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
 class SessionResponse(BaseModel):
     id: str
     user_id: int
@@ -59,6 +73,7 @@ class SessionResponse(BaseModel):
     cht_content: str | None
     validation_report: str | None
     llm_model: str | None
+    current_revision: int | None = None
     created_at: datetime
     updated_at: datetime
 

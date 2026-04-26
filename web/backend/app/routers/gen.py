@@ -12,10 +12,11 @@ from ..database import get_db
 from ..models.session import GenSession
 from ..models.user import User
 from ..schemas.gen import (
-    ConfirmRequest, ParsedData, SessionCreate, SessionListItem, SessionResponse,
+    ConfirmRequest, MessageRequest, ParsedData, SessionCreate,
+    SessionListItem, SessionMessageResponse, SessionResponse,
 )
 from ..services.auth import get_current_user
-from ..services import orchestrator
+from ..services import conversation_service, orchestrator
 
 router = APIRouter(prefix="/api/gen", tags=["generation"])
 
@@ -27,7 +28,7 @@ async def create_session(
     user: User = Depends(get_current_user),
 ):
     session = await orchestrator.create_session(db, user.id, req.description)
-    return session
+    return await _enrich_session(db, session)
 
 
 @router.get("/sessions", response_model=list[SessionListItem])
@@ -50,7 +51,42 @@ async def get_session(
     user: User = Depends(get_current_user),
 ):
     session = await _get_user_session(db, session_id, user.id)
-    return session
+    return await _enrich_session(db, session)
+
+
+@router.get("/sessions/{session_id}/messages", response_model=list[SessionMessageResponse])
+async def get_session_messages(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session = await _get_user_session(db, session_id, user.id)
+    return await conversation_service.get_messages(db, session.id)
+
+
+@router.post("/sessions/{session_id}/messages")
+async def add_session_message(
+    session_id: str,
+    req: MessageRequest,
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    session = await _get_user_session(db, session_id, user.id)
+    await conversation_service.add_message(
+        db, session.id, role="user", kind="answer", content=req.content.strip(),
+    )
+    messages = await conversation_service.get_messages(db, session.id)
+    combined = conversation_service.build_parse_context(messages)
+    session.description = combined
+    await db.commit()
+    parsed = await orchestrator.stage_parse(db, session.id, combined)
+    refreshed = await _get_user_session(db, session_id, user.id)
+    updated_messages = await conversation_service.get_messages(db, session.id)
+    return {
+        "status": refreshed.status,
+        "parsed_data": parsed.model_dump(),
+        "messages": [SessionMessageResponse.model_validate(m).model_dump() for m in updated_messages],
+    }
 
 
 @router.post("/sessions/{session_id}/parse")
@@ -155,3 +191,10 @@ async def _get_user_session(db: AsyncSession, session_id: str, user_id: int) -> 
     if not session:
         raise HTTPException(status_code=404, detail="Session not found")
     return session
+
+
+async def _enrich_session(db: AsyncSession, session: GenSession) -> dict:
+    latest = await conversation_service.get_latest_revision(db, session.id)
+    payload = SessionResponse.model_validate(session).model_dump()
+    payload["current_revision"] = latest.revision if latest else None
+    return payload
