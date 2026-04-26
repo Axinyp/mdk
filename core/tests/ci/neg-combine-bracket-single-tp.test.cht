@@ -1,0 +1,27 @@
+# EXPECT: DEFINE_COMBINE 填写了
+// [反向] 单触屏工程使用 [ tp ]; 括号格式填写 DEFINE_COMBINE — 必须触发错误
+DEFINE_DEVICE
+    tp = T:10:TP;
+
+DEFINE_COMBINE
+    [ tp ];
+
+DEFINE_CONSTANT
+
+DEFINE_VARIABLE
+
+DEFINE_FUNCTION
+
+DEFINE_TIMER
+
+DEFINE_START
+
+DEFINE_EVENT
+    BUTTON_EVENT(tp, 1)
+    {
+        PUSH()
+        {
+        }
+    }
+
+DEFINE_PROGRAME

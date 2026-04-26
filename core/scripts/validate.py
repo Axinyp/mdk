@@ -314,11 +314,13 @@ def validate(filepath):
     # ==================== [13] DEFINE_COMBINE 单 TP 误填 ====================
     print(f"\n{YELLOW}[13/13] 检查 DEFINE_COMBINE 合法性...{NC}")
     combine_block = extract_block(content, 'DEFINE_COMBINE')
-    combine_entries = re.findall(r'\b\w+\s*;', strip_comments(combine_block))
+    combine_code = strip_comments(combine_block).strip()
+    # 匹配 word; 格式和 [ ... ]; 括号格式两种形式
+    combine_entries = re.findall(r'\b\w+\s*;|\[.*?\]\s*;', combine_code, re.DOTALL)
     tp_devices = [name for name, typ in declared_devices.items() if typ == 'TP']
     if combine_entries and len(tp_devices) <= 1:
         errors.append(
-            f"DEFINE_COMBINE 填写了 {len(combine_entries)} 个设备但仅有 {len(tp_devices)} 个 TP: "
+            f"DEFINE_COMBINE 填写了内容但仅有 {len(tp_devices)} 个 TP: "
             "单触屏工程此块必须留空，否则编译报 'overlap' 错误"
         )
     else:
