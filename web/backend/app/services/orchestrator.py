@@ -240,13 +240,20 @@ def _extract_json(text: str) -> dict:
         start = 1
         end = next((i for i in range(len(lines) - 1, 0, -1) if lines[i].strip() == "```"), len(lines))
         text = "\n".join(lines[start:end])
-    # Remove control chars that are never valid in JSON (keep \t \n \r)
+    # Pass 1: strip control chars that are never valid JSON whitespace
     text = re.sub(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]', '', text)
     try:
         return json.loads(text)
     except json.JSONDecodeError:
-        # Escape literal \n \r \t inside string values
+        pass
+    # Pass 2: escape literal control chars inside string values
+    try:
         return json.loads(_sanitize_json(text))
+    except json.JSONDecodeError:
+        pass
+    # Pass 3: nuclear — strip every control char including \t \n \r
+    stripped = re.sub(r'[\x00-\x1f\x7f]', ' ', text)
+    return json.loads(stripped)
 
 
 def _strip_fence(text: str) -> str:

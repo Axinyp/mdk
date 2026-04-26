@@ -1,6 +1,7 @@
 import io
 import json
 import zipfile
+from json import JSONDecodeError
 
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import StreamingResponse
@@ -61,7 +62,9 @@ async def parse_session(
     session = await _get_user_session(db, session_id, user.id)
     try:
         parsed = await orchestrator.stage_parse(db, session.id, session.description)
-        return {"status": "parsed", "data": parsed.model_dump()}
+        return {"status": "parsed", "parsed_data": parsed.model_dump()}
+    except JSONDecodeError as e:
+        raise HTTPException(status_code=502, detail=f"LLM 返回了无法解析的 JSON: {e}")
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
     except Exception as e:
