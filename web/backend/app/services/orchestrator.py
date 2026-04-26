@@ -27,9 +27,10 @@ async def create_session(db: AsyncSession, user_id: int, description: str) -> Ge
         status="created",
     )
     db.add(session)
-    await db.commit()
+    await db.flush()
     await db.refresh(session)
     await conversation_service.add_message(db, session.id, role="user", kind="description", content=description)
+    await db.commit()
     logger.debug("[DB] 新建 session=%s, user=%d", session.id[:8], user_id)
     return session
 

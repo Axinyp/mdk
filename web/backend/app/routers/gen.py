@@ -71,22 +71,30 @@ async def add_session_message(
     db: AsyncSession = Depends(get_db),
     user: User = Depends(get_current_user),
 ):
+    content = req.content.strip()
     session = await _get_user_session(db, session_id, user.id)
-    await conversation_service.add_message(
-        db, session.id, role="user", kind="answer", content=req.content.strip(),
-    )
-    messages = await conversation_service.get_messages(db, session.id)
-    combined = conversation_service.build_parse_context(messages)
-    session.description = combined
-    await db.commit()
-    parsed = await orchestrator.stage_parse(db, session.id, combined)
-    refreshed = await _get_user_session(db, session_id, user.id)
-    updated_messages = await conversation_service.get_messages(db, session.id)
-    return {
-        "status": refreshed.status,
-        "parsed_data": parsed.model_dump(),
-        "messages": [SessionMessageResponse.model_validate(m).model_dump() for m in updated_messages],
-    }
+    try:
+        await conversation_service.add_message(
+            db, session.id, role="user", kind="answer", content=content,
+        )
+        messages = await conversation_service.get_messages(db, session.id)
+        combined = conversation_service.build_parse_context(messages)
+        session.description = combined
+        await db.commit()
+        parsed = await orchestrator.stage_parse(db, session.id, combined)
+        refreshed = await _get_user_session(db, session_id, user.id)
+        updated_messages = await conversation_service.get_messages(db, session.id)
+        return {
+            "status": refreshed.status,
+            "parsed_data": parsed.model_dump(),
+            "messages": [SessionMessageResponse.model_validate(m).model_dump() for m in updated_messages],
+        }
+    except JSONDecodeError as e:
+        raise HTTPException(status_code=502, detail=f"LLM 返回了无法解析的 JSON: {e}")
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Parse stage failed: {e}")
 
 
 @router.post("/sessions/{session_id}/parse")

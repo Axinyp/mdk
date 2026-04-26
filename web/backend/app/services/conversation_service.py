@@ -2,7 +2,8 @@ from __future__ import annotations
 
 import json
 
-from sqlalchemy import select
+from sqlalchemy import func, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.session import ParseRevision, SessionMessage
@@ -18,7 +19,7 @@ async def add_message(
 ) -> SessionMessage:
     msg = SessionMessage(session_id=session_id, role=role, kind=kind, content=content)
     db.add(msg)
-    await db.commit()
+    await db.flush()
     await db.refresh(msg)
     return msg
 
@@ -55,18 +56,29 @@ async def save_revision(
     session_id: str,
     parsed: ParsedData,
 ) -> ParseRevision:
-    latest = await get_latest_revision(db, session_id)
-    next_rev = 1 if latest is None else latest.revision + 1
-    rev = ParseRevision(
-        session_id=session_id,
-        revision=next_rev,
-        parsed_data=json.dumps(parsed.model_dump(), ensure_ascii=False),
-        missing_info=json.dumps(parsed.missing_info, ensure_ascii=False),
-    )
-    db.add(rev)
-    await db.commit()
-    await db.refresh(rev)
-    return rev
+    parsed_json = json.dumps(parsed.model_dump(), ensure_ascii=False)
+    missing_json = json.dumps(parsed.missing_info, ensure_ascii=False)
+    for _ in range(3):
+        result = await db.execute(
+            select(func.coalesce(func.max(ParseRevision.revision), 0))
+            .where(ParseRevision.session_id == session_id)
+        )
+        next_rev = int(result.scalar_one()) + 1
+        rev = ParseRevision(
+            session_id=session_id,
+            revision=next_rev,
+            parsed_data=parsed_json,
+            missing_info=missing_json,
+        )
+        try:
+            async with db.begin_nested():
+                db.add(rev)
+                await db.flush()
+            await db.refresh(rev)
+            return rev
+        except IntegrityError:
+            continue
+    raise RuntimeError("Failed to allocate parse revision after concurrent updates")
 
 
 def format_clarification_question(missing_info: list[str]) -> str:
