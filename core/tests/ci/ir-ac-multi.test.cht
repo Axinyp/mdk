@@ -1,0 +1,54 @@
+// [正向] 双 IR 设备同步空调控制
+// 测试点: 两台 IR 设备各自完整 if-else 链，命名采用顺序后缀 IR1/IR2
+DEFINE_DEVICE
+    TR1_IR1 = L:2:IR;
+    TR1_IR2 = L:3:IR;
+    tp = T:10:TP;
+
+DEFINE_COMBINE
+
+DEFINE_CONSTANT
+
+DEFINE_VARIABLE
+    int curTemp = 25;
+
+DEFINE_FUNCTION
+    void SendAcTemp(int temp)
+    {
+        if (temp == 16) { SEND_IRCODE(TR1_IR1, 1, IRCODE<"UserIRDB:room:brand:model:ts:16_1">); }
+        else if (temp == 17) { SEND_IRCODE(TR1_IR1, 1, IRCODE<"UserIRDB:room:brand:model:ts:17_1">); }
+        else if (temp == 18) { SEND_IRCODE(TR1_IR1, 1, IRCODE<"UserIRDB:room:brand:model:ts:18_1">); }
+        else if (temp == 19) { SEND_IRCODE(TR1_IR1, 1, IRCODE<"UserIRDB:room:brand:model:ts:19_1">); }
+        else if (temp == 20) { SEND_IRCODE(TR1_IR1, 1, IRCODE<"UserIRDB:room:brand:model:ts:20_1">); }
+        else if (temp == 25) { SEND_IRCODE(TR1_IR1, 1, IRCODE<"UserIRDB:room:brand:model:ts:25_1">); }
+        else if (temp == 30) { SEND_IRCODE(TR1_IR1, 1, IRCODE<"UserIRDB:room:brand:model:ts:30_1">); }
+
+        if (temp == 16) { SEND_IRCODE(TR1_IR2, 1, IRCODE<"UserIRDB:room:brand:model:ts:16_1">); }
+        else if (temp == 17) { SEND_IRCODE(TR1_IR2, 1, IRCODE<"UserIRDB:room:brand:model:ts:17_1">); }
+        else if (temp == 18) { SEND_IRCODE(TR1_IR2, 1, IRCODE<"UserIRDB:room:brand:model:ts:18_1">); }
+        else if (temp == 19) { SEND_IRCODE(TR1_IR2, 1, IRCODE<"UserIRDB:room:brand:model:ts:19_1">); }
+        else if (temp == 20) { SEND_IRCODE(TR1_IR2, 1, IRCODE<"UserIRDB:room:brand:model:ts:20_1">); }
+        else if (temp == 25) { SEND_IRCODE(TR1_IR2, 1, IRCODE<"UserIRDB:room:brand:model:ts:25_1">); }
+        else if (temp == 30) { SEND_IRCODE(TR1_IR2, 1, IRCODE<"UserIRDB:room:brand:model:ts:30_1">); }
+
+        SEND_TEXT(tp, 300, ITOA(temp));
+    }
+
+DEFINE_TIMER
+
+DEFINE_START
+
+DEFINE_EVENT
+    BUTTON_EVENT(tp, 301)
+    {
+        PUSH()
+        {
+            if (curTemp < 30)
+            {
+                curTemp = curTemp + 1;
+                SendAcTemp(curTemp);
+            }
+        }
+    }
+
+DEFINE_PROGRAME

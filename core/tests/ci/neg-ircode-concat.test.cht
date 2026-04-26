@@ -1,0 +1,33 @@
+# EXPECT: IRCODE<> 内禁止使用 + 拼接
+// [反向] IRCODE<> 内使用 + 拼接 — 必须触发错误
+DEFINE_DEVICE
+    TR1_IR1 = L:2:IR;
+    tp = T:10:TP;
+
+DEFINE_COMBINE
+
+DEFINE_CONSTANT
+
+DEFINE_VARIABLE
+    int curTemp = 25;
+
+DEFINE_FUNCTION
+    void SendAcTemp(int temp)
+    {
+        SEND_IRCODE(TR1_IR1, 1, IRCODE<"UserIRDB:room:brand:model:ts:" + ITOA(temp) + "_1">);
+    }
+
+DEFINE_TIMER
+
+DEFINE_START
+
+DEFINE_EVENT
+    BUTTON_EVENT(tp, 301)
+    {
+        PUSH()
+        {
+            SendAcTemp(curTemp);
+        }
+    }
+
+DEFINE_PROGRAME

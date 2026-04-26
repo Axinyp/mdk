@@ -1,0 +1,27 @@
+# EXPECT: 未知元设备类型
+// [反向] 使用不存在的设备类型 DSP — 必须触发错误
+DEFINE_DEVICE
+    M_DSP1 = M:0:DSP;
+    tp = T:10:TP;
+
+DEFINE_COMBINE
+
+DEFINE_CONSTANT
+
+DEFINE_VARIABLE
+
+DEFINE_FUNCTION
+
+DEFINE_TIMER
+
+DEFINE_START
+
+DEFINE_EVENT
+    BUTTON_EVENT(tp, 1)
+    {
+        PUSH()
+        {
+        }
+    }
+
+DEFINE_PROGRAME

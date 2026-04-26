@@ -1,0 +1,30 @@
+# EXPECT: GET_LEVEL() 函数不存在
+// [反向] 使用不存在的 GET_LEVEL() 函数 — 必须触发错误
+DEFINE_DEVICE
+    TP1 = T:10:TP;
+    VOL1 = L:1:VOL;
+
+DEFINE_COMBINE
+
+DEFINE_CONSTANT
+
+DEFINE_VARIABLE
+    int vol = 50;
+
+DEFINE_FUNCTION
+
+DEFINE_TIMER
+
+DEFINE_START
+
+DEFINE_EVENT
+    LEVEL_EVENT(TP1, 200)
+    {
+        CHANGED()
+        {
+            vol = GET_LEVEL(TP1, 200);
+            SET_VOL_M(VOL1, 1, vol);
+        }
+    }
+
+DEFINE_PROGRAME

@@ -277,7 +277,7 @@ def validate(filepath):
         print(f"  {GREEN}✓ 无重复事件{NC}")
 
     # ==================== [10] 常量 + TODO ====================
-    print(f"\n{YELLOW}[10/10] 检查常量 + TODO...{NC}")
+    print(f"\n{YELLOW}[10/13] 检查常量 + TODO...{NC}")
     const_block = extract_block(content, 'DEFINE_CONSTANT')
     if re.search(r'^\s*const\s+', const_block, re.MULTILINE):
         errors.append("DEFINE_CONSTANT 不应使用 'const' 关键字，格式: 常量名 = 值;")
@@ -292,6 +292,37 @@ def validate(filepath):
             warnings.append(f"...共 {len(todos)} 处 TODO")
     else:
         print(f"  {GREEN}✓ 常量正确，无 TODO{NC}")
+
+    # ==================== [11] GET_LEVEL 错误用法 ====================
+    print(f"\n{YELLOW}[11/13] 检查 GET_LEVEL 错误用法...{NC}")
+    get_level_uses = re.findall(r'\bGET_LEVEL\s*\(', content)
+    if get_level_uses:
+        for _ in get_level_uses:
+            errors.append("GET_LEVEL() 函数不存在: 在 LEVEL_EVENT 回调中用 LEVEL.Value 属性获取当前值")
+    else:
+        print(f"  {GREEN}✓ 无 GET_LEVEL 错误用法{NC}")
+
+    # ==================== [12] IRCODE<> 内字符串拼接 ====================
+    print(f"\n{YELLOW}[12/13] 检查 IRCODE<> 拼接...{NC}")
+    ircode_concat_matches = re.findall(r'IRCODE\s*<[^>]*\+[^>]*>', content)
+    if ircode_concat_matches:
+        for m in ircode_concat_matches:
+            errors.append(f"IRCODE<> 内禁止使用 + 拼接 (编译期宏只接受字面常量): {m[:70]}")
+    else:
+        print(f"  {GREEN}✓ IRCODE<> 内无非法拼接{NC}")
+
+    # ==================== [13] DEFINE_COMBINE 单 TP 误填 ====================
+    print(f"\n{YELLOW}[13/13] 检查 DEFINE_COMBINE 合法性...{NC}")
+    combine_block = extract_block(content, 'DEFINE_COMBINE')
+    combine_entries = re.findall(r'\b\w+\s*;', strip_comments(combine_block))
+    tp_devices = [name for name, typ in declared_devices.items() if typ == 'TP']
+    if combine_entries and len(tp_devices) <= 1:
+        errors.append(
+            f"DEFINE_COMBINE 填写了 {len(combine_entries)} 个设备但仅有 {len(tp_devices)} 个 TP: "
+            "单触屏工程此块必须留空，否则编译报 'overlap' 错误"
+        )
+    else:
+        print(f"  {GREEN}✓ DEFINE_COMBINE 合法{NC}")
 
     # ==================== 输出结果 ====================
     print(f"\n{BLUE}═══════════════════════════════════════════════════{NC}")

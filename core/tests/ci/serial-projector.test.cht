@@ -1,0 +1,36 @@
+// [正向] 串口投影仪控制
+// 测试点: COM 设备声明、SET_COM 初始化（必须在 DEFINE_START）、SEND_COM 调用
+DEFINE_DEVICE
+    PJ1 = L:1:COM;
+    tp = T:10:TP;
+
+DEFINE_COMBINE
+
+DEFINE_CONSTANT
+
+DEFINE_VARIABLE
+
+DEFINE_FUNCTION
+
+DEFINE_TIMER
+
+DEFINE_START
+    SET_COM(PJ1, 9600, 8, 0, 1, 0);
+
+DEFINE_EVENT
+    BUTTON_EVENT(tp, 1)
+    {
+        PUSH()
+        {
+            SEND_COM(PJ1, "02 00 00 00 00 02 03 6A");
+        }
+    }
+    BUTTON_EVENT(tp, 2)
+    {
+        PUSH()
+        {
+            SEND_COM(PJ1, "02 01 00 00 00 00 03 6B");
+        }
+    }
+
+DEFINE_PROGRAME

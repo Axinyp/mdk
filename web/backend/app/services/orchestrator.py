@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..models.session import GenSession
 from ..models.setting import Setting
 from ..schemas.gen import ConfirmRequest, FunctionItem, ParsedData
-from . import join_registry, knowledge, prompt_builder, validator
+from . import join_registry, knowledge, prompt_builder, semantic_validator, validator
 from .llm import get_default_config, llm_chat
 
 
@@ -79,6 +79,13 @@ async def stage_parse(db: AsyncSession, session_id: str, description: str) -> Pa
         parsed = ParsedData(**_extract_json(content))
         logger.info("[FLOW] 解析完成 — 设备=%d, 功能=%d, 页面=%d",
                     len(parsed.devices), len(parsed.functions), len(parsed.pages))
+
+        semantic_issues = semantic_validator.validate_parsed_data(parsed)
+        if semantic_issues:
+            logger.warning("[FLOW] 语义校验发现 %d 个问题: %s", len(semantic_issues), semantic_issues[:3])
+            if not parsed.missing_info:
+                parsed.missing_info = []
+            parsed.missing_info = list(parsed.missing_info) + [f"[语义告警] {s}" for s in semantic_issues]
 
         session.parsed_data = json.dumps(parsed.model_dump(), ensure_ascii=False)
         session.llm_model = config.model

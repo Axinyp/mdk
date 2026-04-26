@@ -1,0 +1,40 @@
+// [正向] 继电器基本控制模式
+// 测试点: RELAY 设备声明、ON_RELAY/OFF_RELAY 调用、变量初始化
+DEFINE_DEVICE
+    RLY1 = L:1:RELAY;
+    tp = T:10:TP;
+
+DEFINE_COMBINE
+
+DEFINE_CONSTANT
+
+DEFINE_VARIABLE
+    int lightState = 0;
+
+DEFINE_FUNCTION
+
+DEFINE_TIMER
+
+DEFINE_START
+
+DEFINE_EVENT
+    BUTTON_EVENT(tp, 1)
+    {
+        PUSH()
+        {
+            ON_RELAY(RLY1, 1);
+            SET_BUTTON(tp, 1, 1);
+            lightState = 1;
+        }
+    }
+    BUTTON_EVENT(tp, 2)
+    {
+        PUSH()
+        {
+            OFF_RELAY(RLY1, 1);
+            SET_BUTTON(tp, 2, 0);
+            lightState = 0;
+        }
+    }
+
+DEFINE_PROGRAME
