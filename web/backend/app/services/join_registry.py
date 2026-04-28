@@ -32,12 +32,24 @@ ALLOCATABLE_RANGES: dict[str, tuple[tuple[int, int], ...]] = {
 }
 
 ACTION_TO_CATEGORY: dict[str, str] = {
-    "RELAY": "light",
-    "COM": "light",
-    "IR": "source",
-    "TCP": "source",
-    "UDP": "source",
-    "LEVEL": "slider",
+    "ON_RELAY": "light",
+    "OFF_RELAY": "light",
+    "SEND_COM": "light",
+    "SET_COM": "light",
+    "SEND_IO": "light",
+    "SET_IO_DIR": "light",
+    "SEND_LITE": "light",
+    "SEND_IRCODE": "source",
+    "SEND_TCP": "source",
+    "SEND_UDP": "source",
+    "WAKEUP_ONLAN": "source",
+    "SEND_M2M_DATA": "source",
+    "SEND_M2M_JNPUSH": "source",
+    "SEND_M2M_JNRELEASE": "source",
+    "SEND_M2M_LEVEL": "source",
+    "SET_LEVEL": "slider",
+    "SET_VOL_M": "slider",
+    "SEND_M2M_LEVEL_SLIDER": "slider",
 }
 
 CONTROL_TYPE_CATEGORY: dict[str, str] = {
@@ -59,8 +71,9 @@ NAME_KEYWORDS: dict[str, list[str]] = {
 def _guess_category(func: FunctionItem) -> str:
     if func.control_type in CONTROL_TYPE_CATEGORY:
         return CONTROL_TYPE_CATEGORY[func.control_type]
-    if func.action in ACTION_TO_CATEGORY:
-        cat = ACTION_TO_CATEGORY[func.action]
+    action_upper = (func.action or "").upper()
+    if action_upper in ACTION_TO_CATEGORY:
+        cat = ACTION_TO_CATEGORY[action_upper]
         name_lower = func.name.lower()
         for kw_cat, keywords in NAME_KEYWORDS.items():
             if any(kw in name_lower for kw in keywords):
@@ -100,7 +113,8 @@ def allocate(functions: list[FunctionItem]) -> list[FunctionItem]:
         if func.join_number > 0:
             continue
         category = _guess_category(func)
-        group_key = f"{category}:{func.device}" if func.device else ""
+        dev = (func.params or {}).get("dev", "")
+        group_key = f"{category}:{dev}" if dev else ""
         if group_key and group_key in device_join:
             join_number = device_join[group_key]
         else:

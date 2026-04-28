@@ -82,3 +82,10 @@ class ProtocolSubmissionInvalid(DomainError):
 class ProtocolSubmissionFileTooLarge(DomainError):
     status_code = 400
     code = "PROTOCOL_SUBMISSION_TOO_LARGE"
+
+
+class ContractValidationError(DomainError):
+    """FunctionItem.params violates the action × params contract (forbidden key present)."""
+
+    status_code = 400
+    code = "CONTRACT_VALIDATION_ERROR"

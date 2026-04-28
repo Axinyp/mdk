@@ -18,14 +18,25 @@ FUNC_COMMON_DIR = DOCS_DIR / "系统函数库" / "常用"
 FUNC_HARDWARE_DIR = DOCS_DIR / "系统函数库" / "专用硬件"
 
 ACTION_TO_FUNC: dict[str, str] = {
-    "RELAY": "继电器控制函数",
-    "COM": "串口控制函数",
-    "IR": "红外控制函数",
-    "LEVEL": "DSP音量控制函数",
-    "TCP": "网络控制相关函数",
-    "UDP": "网络控制相关函数",
-    "IO": "IO控制函数",
-    "DMX": "DMX512控制函数",
+    "ON_RELAY":          "继电器控制函数",
+    "OFF_RELAY":         "继电器控制函数",
+    "SEND_COM":          "串口控制函数",
+    "SET_COM":           "串口控制函数",
+    "SEND_IRCODE":       "红外控制函数",
+    "SEND_LITE":         "灯光控制函数",
+    "SEND_IO":           "IO控制函数",
+    "SET_IO_DIR":        "IO控制函数",
+    "SEND_UDP":          "网络控制相关函数",
+    "SEND_TCP":          "网络控制相关函数",
+    "WAKEUP_ONLAN":      "网络控制相关函数",
+    "SEND_M2M_DATA":     "网络控制相关函数",
+    "SEND_M2M_JNPUSH":   "网络控制相关函数",
+    "SEND_M2M_JNRELEASE":"网络控制相关函数",
+    "SEND_M2M_LEVEL":    "网络控制相关函数",
+    "SET_LEVEL":         "DSP音量控制函数",
+    "SET_VOL_M":         "DSP音量控制函数",
+    "SET_MATRIX_M":      "矩阵控制函数",
+    "DMX":               "DMX512控制函数",
 }
 
 

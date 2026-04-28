@@ -13,7 +13,7 @@ from ..models.session import GenSession
 from ..models.setting import Setting
 from ..schemas.gen import ConfirmRequest, FunctionItem, ParsedData
 from . import conversation_service, join_registry, knowledge, prompt_builder, semantic_validator, validator
-from .exceptions import ConcurrentTransition
+from .exceptions import ConcurrentTransition, ContractValidationError
 from .llm import get_default_config, llm_chat
 from .session_state import InvalidTransition, SessionStatus, assert_transition
 
@@ -227,6 +227,18 @@ async def stage_confirm(db: AsyncSession, session_id: str, confirmed: ParsedData
     session = await _transition(db, session_id, SessionStatus.CONFIRMED)
 
     try:
+        # ── 契约校验：forbidden key 违规 = critical 阻断；required 缺失 = warn 放行 ──
+        issues = semantic_validator.validate_parsed_data(confirmed)
+        critical = [s for s in issues if not s.startswith("[warn]")]
+        warnings = [s for s in issues if s.startswith("[warn]")]
+        if warnings:
+            logger.warning("[FLOW] 契约告警（非阻断）— {} 条", len(warnings))
+        if critical:
+            detail = "\n".join(critical)
+            logger.warning("[FLOW] 契约校验阻断 — {} 个 critical 问题:\n{}", len(critical), detail)
+            await _mark_error(session, db, f"Contract validation failed:\n{detail}")
+            raise ContractValidationError("; ".join(critical[:3]))
+
         functions_with_joins = join_registry.allocate(confirmed.functions)
         logger.debug("[FLOW] Join 分配完成, 功能数={}", len(functions_with_joins))
         session.confirmed_data = json.dumps(confirmed.model_dump(), ensure_ascii=False)
@@ -234,6 +246,8 @@ async def stage_confirm(db: AsyncSession, session_id: str, confirmed: ParsedData
         await db.commit()
         logger.debug("[DB] 确认数据已持久化 session={}", session_id[:8])
         return functions_with_joins
+    except ContractValidationError:
+        raise  # _mark_error 已在上方调用，不重复标记
     except Exception:
         await _mark_error(session, db, "Confirm stage failed")
         raise

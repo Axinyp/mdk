@@ -171,8 +171,12 @@ def build_cht_prompt(
             "\n\n场景模式处理规则：\n"
             "- 每个 scene 对象生成一个 FUNCTION（函数名 = scene.name 去空格转大写）\n"
             "- 函数体按 scene.actions 顺序生成对应调用语句\n"
-            "- action 格式：RELAY.On/Off → RELAY.On(<device>,1)；COM.Send → COM.Send(<device>,<value>)；"
-            "IR.Send → IR.Send(<device>,<value>)；DIMMER.Set → DIMMER.Set(<device>,<value>)\n"
+            "- action 格式（官方真名直引）：\n"
+            "  ON_RELAY/OFF_RELAY → ON_RELAY(<dev>, <channel>)；\n"
+            "  SEND_COM → SEND_COM(<dev>, <channel>, \"<hex>\")；\n"
+            "  SEND_IRCODE → SEND_IRCODE(<dev>, <channel>, IRCODE<\"...\">)；\n"
+            "  SEND_LITE → SEND_LITE(<dev>, <channel>, <val>)；\n"
+            "  SEND_UDP → SEND_UDP(\"<ip>\", <port>, \"<str>\")（3 参数，无 dev）\n"
             "- 若 scene.trigger_join > 0，在 DEFINE_EVENT 中添加 PUSH JOIN:<trigger_join>,1 事件调用该函数\n"
         )
 
@@ -210,14 +214,14 @@ def collect_matched_patterns(confirmed_data: ParsedData) -> list[str]:
     """根据确认清单中的设备/功能，按需加载匹配的代码模式"""
     keywords = set()
     for func in confirmed_data.functions:
-        action = func.action.upper()
-        if action in ("RELAY",):
+        action = (func.action or "").upper()
+        if action in ("ON_RELAY", "OFF_RELAY"):
             keywords.add("继电器")
-        elif action in ("COM",):
+        elif action in ("SEND_COM", "SET_COM"):
             keywords.add("串口")
-        elif action in ("IR",):
+        elif action == "SEND_IRCODE":
             keywords.add("红外")
-        elif action in ("LEVEL",):
+        elif action in ("SET_LEVEL", "SET_VOL_M", "SEND_M2M_LEVEL"):
             keywords.add("音量")
         name = func.name
         if any(kw in name for kw in ("窗帘", "帘")):

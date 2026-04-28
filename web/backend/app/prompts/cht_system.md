@@ -38,25 +38,36 @@ DEFINE_DEVICE → DEFINE_COMBINE → DEFINE_CONSTANT → DEFINE_VARIABLE → DEF
 6. 空块保留注释行即可（如 DEFINE_TIMER / DEFINE_PROGRAME）
 7. 所有块必须出现，包括空块
 
-## Action 调用签名（**严格遵守，不要凭空增减参数**）
-配置 JSON 中每个 function 的 `action` 字段映射到下列调用之一。**括号内的参数数量是签名定义的，不允许多塞 device/channel 等冗余参数**：
+## Action 调用签名（**按 function.params 镜像渲染，严禁多塞或漏塞参数**）
 
-| action | 函数签名 | 参数说明 |
-|--------|---------|----------|
-| `RELAY.On` / `RELAY.Off` | `RELAY.On(<device>, <channel>)` / `RELAY.Off(<device>, <channel>)` | 2 参数：设备名 + 通道号（取 function.channel，未指定填 1） |
-| `COM.Send` | `COM.Send(<device>, "<data>")` | 2 参数：设备名 + 数据串（取自描述中给的串口指令） |
-| `IR.Send` | `IR.Send(<device>, "<irCode>")` | 2 参数：设备名 + 红外码 |
-| `DIMMER.Set` | `DIMMER.Set(<device>, <value>)` | 2 参数：设备名 + 亮度值（0~100） |
-| `IP.Send` | `IP.Send(<device>, "<data>")` | 2 参数：设备名 + 数据串 |
-| `LEVEL` | `LEVEL.Set(<device>, <value>)` 或 `LEVEL.Inc/Dec(<device>)` | DSP 音量；具体看用户描述 |
-| `UDP.Send` / `TCP.Send` | **`SEND_UDP("<ip>", <port>, "<data>")`** / `SEND_TCP("<ip>", <port>, "<data>")` | **3 参数：IP 字符串 + 端口整数 + 数据串。不要传 device 名、不要传 channel**。IP/端口/数据从用户描述中提取（如"172.16.58.211, 端口 54433, 数据 0x424c01910001"） |
-| `WAKEUP_ONLAN` | `WAKEUP_ONLAN("<MAC>")` | 1 参数：MAC 地址字符串 |
-| `HTTP` | `HTTP_GET("<url>")` 或 `HTTP_POST("<url>", "<body>")` | URL 从描述中提取 |
+`action` 字段就是中控官方函数名（全大写下划线），直接生成对应调用。
+`params` 字段就是函数实参，按契约表中声明顺序展开：
 
-**通用规则**：
-- function.device 字段在 RELAY/COM/IR/DIMMER/IP 等"设备类"action 中作为第 1 参数；在 SEND_UDP/SEND_TCP/WAKEUP_ONLAN 等"网络类"action 中**忽略**（这类函数不需要 device 参数）
-- function.channel 字段仅在 RELAY 类 action 中作为通道号；其他 action 中忽略
-- 用户描述中给出 IP/端口/数据/MAC 时，直接抄入对应位置；缺失时**报告到 missing_info，不要瞎编**
+| action | 渲染示例 | 易错点 |
+|--------|---------|--------|
+| ON_RELAY / OFF_RELAY | `ON_RELAY(RELAY_M, 2);` | dev **不加引号**（标识符） |
+| SEND_COM | `SEND_COM(COM_1, 1, "0xAA01");` | 键名是 `str` 不是 `data` |
+| SEND_IRCODE | `SEND_IRCODE(TR_0740S_IR1, 1, IRCODE<"...">);` | |
+| SEND_LITE | `SEND_LITE(LITE_1, 1, 32768);` | val 范围 0~65535 |
+| SEND_IO | `SEND_IO(IO_1, 1, 1);` | |
+| SEND_UDP / SEND_TCP | `SEND_UDP("192.168.1.100", 8000, "0x424c01");` | **3 参数，无 dev/channel** |
+| WAKEUP_ONLAN | `WAKEUP_ONLAN("4437e65b1735");` | MAC 12 位小写 hex，无分隔符 |
+| SEND_M2M_DATA | `SEND_M2M_DATA("192.168.1.1", "data");` | 键叫 `data` |
+| SEND_M2M_JNPUSH / JNRELEASE | `SEND_M2M_JNPUSH("ip", 1);` | jNumber 驼峰 |
+| SET_BUTTON | `SET_BUTTON(tp, 101, 1);` | state = 0/1 |
+| SET_LEVEL | `SET_LEVEL(tp, 1087, 0);` | val 范围 0~65535 |
+| SEND_TEXT / SEND_PAGING | `SEND_TEXT(tp, 201, "文字");` | 键叫 text |
+| SET_VOL_M | `SET_VOL_M(1, 1, -30);` | **无 dev**；vol 单位 dB |
+| SET_MATRIX_M | `SET_MATRIX_M(1, 3);` | **无 dev**；2 参数 |
+| SLEEP | `SLEEP(1000);` | 毫秒 |
+| START_TIMER | `START_TIMER(testTimer, 1000);` | name **不加引号** |
+| CANCEL_TIMER / CANCEL_WAIT | `CANCEL_TIMER("testTimer");` | name **加引号** |
+
+**渲染规则**：
+1. **action 字段就是函数名**，直接写 `ON_RELAY(...)` 不要映射成别的
+2. **params 键值就是实参**，字符串加双引号，dev/设备名不加引号（标识符），int 直接写
+3. **严禁从用户原始需求中重抽参数**，所有附加参数已结构化在 `function.params`，直接读
+4. **params 缺键时**：在 cht 末尾用注释报告，不要瞎编：`// MISSING_PARAMS: <function_name> 缺少 <key>`
 
 ## 场景模式（scenes）生成规则
 若配置中包含 `scenes` 数组，按以下规则处理：

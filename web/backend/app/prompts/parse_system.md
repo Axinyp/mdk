@@ -27,9 +27,8 @@
       "join_source": "user_specified|auto",
       "control_type": "DFCButton|DFCSlider|DFCTextbox|DFCPicture",
       "btn_type": "NormalBtn|AutolockBtn|MutualLockBtn|null",
-      "device": "关联的 DEFINE_DEVICE 设备名，无关联设备时填空字符串\"\"，禁止填null",
-      "channel": 1,
-      "action": "RELAY|COM|IR|TCP|UDP|LEVEL",
+      "action": "ON_RELAY|OFF_RELAY|SEND_COM|SEND_IRCODE|SEND_UDP|SEND_TCP|WAKEUP_ONLAN|...",
+      "params": {"dev": "设备名", "channel": 1},
       "image": "图片资源路径或null（由用户手动填写，解析时留null）"
     }
   ],
@@ -42,7 +41,7 @@
       "scene_type": "meeting|rest|leave|custom",
       "trigger_join": 0,
       "actions": [
-        {"device": "设备名", "action": "RELAY.On|RELAY.Off|COM.Send|IR.Send|DIMMER.Set|IP.Send", "value": "指令值或null"}
+        {"device": "设备名", "action": "ON_RELAY|OFF_RELAY|SEND_COM|SEND_IRCODE|SEND_LITE|SEND_UDP", "value": "指令值或null"}
       ]
     }
   ],
@@ -67,3 +66,30 @@
 13. 同一块物理板的不同功能（如 COM 和 IR）分别声明，board 字段填该板的真实编号
 14. **触摸屏必须声明**：用户描述中出现触摸屏编号（T:N 或"触摸屏 N 号"等）时，必须在 devices 中声明一条 type=TP、board=N 的设备；CHT 代码中的所有事件都要引用此设备名，不可省略
 15. **scenes 字段**：若用户描述中提到"场景"、"模式"（如会议模式、休息模式、离开模式、上课模式等），则在 scenes 数组中提取每个场景；未提及任何场景时 scenes 为空数组 []；scene_type 从 meeting/rest/leave/custom 中选择最匹配的；actions 按场景描述中提到的动作序列填写；trigger_join 设为 0（由用户后续配置）
+16. **action × params 契约**：`action` 必须从下表 Tier 1 核心函数中取（官方函数名，全大写下划线），同时在 `params` 中填入对应必填键：
+
+| action | 必填 params 键 | 注意点 |
+|--------|--------------|--------|
+| ON_RELAY / OFF_RELAY | dev, channel | channel 是 int，从 1 起 |
+| SEND_COM | dev, channel, str | 键名是 `str` 不是 `data`；`0x` 开头表示 hex |
+| SEND_IRCODE | dev, channel, str | str 可以是 `IRCODE<"...">` 引用 |
+| SEND_LITE | dev, channel, val | val 范围 0~65535 |
+| SEND_IO | dev, channel, vol | vol = 0/1 |
+| SEND_UDP / SEND_TCP | ip, port, str | **3 参数，禁止塞 dev/channel** |
+| WAKEUP_ONLAN | MAC | **大写 MAC**；12 位无分隔符 |
+| SEND_M2M_DATA | ip, data | 键叫 `data`（特例） |
+| SEND_M2M_JNPUSH / JNRELEASE | ip, jNumber | jNumber 驼峰 |
+| SEND_M2M_LEVEL | ip, jNumber, val | |
+| SET_BUTTON | dev, channel, state | state = 0/1 |
+| SET_LEVEL | dev, channel, val | val 范围 0~65535 |
+| SEND_TEXT / SEND_PAGING | dev, channel, text | 键叫 text |
+| SEND_PICTURE | dev, channel, picIndex | |
+| SET_VOL_M | channel, mute, vol | **无 dev**；vol 单位 dB，范围 [-60, 6] |
+| SET_MATRIX_M | out, in | **无 dev**；2 参数 |
+| SLEEP | time | 毫秒 |
+| START_TIMER | name, time | name 是 TIMER 函数名，不带引号 |
+| CANCEL_TIMER / CANCEL_WAIT | name | name 带引号字符串 |
+| SET_COM | dev, channel, sband, databit, jo, stopbit, dataStream, comType | 8 参数全填 |
+| TRACE | msg | |
+
+**抽不到必填键时**：在 `missing_info` 追加 `"功能 <name>: 缺少 <param>"`，params 中该键留空字符串，**不要瞎编值**。

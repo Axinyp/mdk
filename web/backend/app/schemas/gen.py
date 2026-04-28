@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -18,12 +18,12 @@ class FunctionItem(BaseModel):
     join_source: str | None = "auto"
     control_type: str | None = "DFCButton"
     btn_type: str | None = "NormalBtn"
-    device: str | None = None
-    channel: int | None = None
-    action: str | None = ""
+    action: str = ""                    # 官方函数名直引（SEND_UDP / ON_RELAY ...）
+    params: dict[str, Any] = {}         # 签名镜像，无参函数填 {}
     image: str | None = None
+    template_id: str | None = None      # PR-3 占位符
 
-    @field_validator('device', 'action', 'join_source', 'control_type', mode='before')
+    @field_validator('action', 'join_source', 'control_type', mode='before')
     @classmethod
     def coerce_none_str(cls, v: object) -> object:
         return "" if v is None else v
@@ -37,7 +37,7 @@ class PageItem(BaseModel):
 
 class SceneActionItem(BaseModel):
     device: str = ""
-    action: str = "RELAY.On"
+    action: str = "ON_RELAY"
     value: str | None = None
 
 

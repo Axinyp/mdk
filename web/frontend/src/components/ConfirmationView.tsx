@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { Fragment, useState } from 'react'
+import ParamsForm, { missingRequired } from './ParamsForm'
 
 export interface SceneActionItem {
   device: string
@@ -26,7 +27,9 @@ export interface FunctionItem {
   join_source: 'auto' | 'user_specified'
   btn_type?: string
   control_type?: string
-  device?: string
+  action?: string
+  params?: Record<string, unknown>
+  template_id?: string | null
   image?: string
 }
 
@@ -61,7 +64,12 @@ const SCENE_TYPE_BADGE: Record<SceneModeItem['scene_type'], { label: string; cls
   custom:  { label: '自定义', cls: 'bg-purple-100 text-purple-600' },
 }
 
-const ACTION_OPTIONS = ['RELAY.On', 'RELAY.Off', 'COM.Send', 'IR.Send', 'DIMMER.Set', 'IP.Send']
+const ACTION_OPTIONS = [
+  'ON_RELAY', 'OFF_RELAY', 'SEND_COM', 'SEND_IRCODE', 'SEND_LITE', 'SEND_IO',
+  'SEND_UDP', 'SEND_TCP', 'WAKEUP_ONLAN', 'SEND_M2M_DATA', 'SEND_M2M_JNPUSH',
+  'SEND_M2M_JNRELEASE', 'SET_BUTTON', 'SET_LEVEL', 'SEND_TEXT', 'SET_VOL_M',
+  'SET_MATRIX_M', 'SLEEP', 'START_TIMER', 'CANCEL_TIMER', 'TRACE',
+]
 
 const CELL_INPUT =
   'w-full px-2 py-1 text-sm text-slate-800 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500'
@@ -75,6 +83,7 @@ export default function ConfirmationView({ data, onConfirm, readOnly = false }: 
   })
   const [activeTab, setActiveTab] = useState<Tab>('devices')
   const [collapsedScenes, setCollapsedScenes] = useState<Set<number>>(new Set())
+  const [expandedFunctions, setExpandedFunctions] = useState<Set<number>>(new Set())
   const [showMissingConfirm, setShowMissingConfirm] = useState(false)
 
   // ── Device helpers ──────────────────────────────────────────────────────
@@ -97,7 +106,13 @@ export default function ConfirmationView({ data, onConfirm, readOnly = false }: 
   const removeFunction = (i: number) =>
     setEditData({ ...editData, functions: editData.functions.filter((_, idx) => idx !== i) })
   const addFunction = () =>
-    setEditData({ ...editData, functions: [...editData.functions, { name: '', join_number: 0, join_source: 'auto', btn_type: '', control_type: '', device: '' }] })
+    setEditData({ ...editData, functions: [...editData.functions, { name: '', join_number: 0, join_source: 'auto', btn_type: '', control_type: '', action: '', params: {} }] })
+  const toggleExpandFn = (i: number) =>
+    setExpandedFunctions(prev => {
+      const next = new Set(prev)
+      if (next.has(i)) next.delete(i); else next.add(i)
+      return next
+    })
 
   // ── Page helpers ─────────────────────────────────────────────────────────
   const updatePage = (i: number, field: string, value: unknown) => {
@@ -142,7 +157,7 @@ export default function ConfirmationView({ data, onConfirm, readOnly = false }: 
   }
   const addAction = (si: number) => {
     const scenes = [...(editData.scenes ?? [])]
-    scenes[si] = { ...scenes[si], actions: [...scenes[si].actions, { device: '', action: 'RELAY.On', value: '' }] }
+    scenes[si] = { ...scenes[si], actions: [...scenes[si].actions, { device: '', action: 'ON_RELAY', value: '' }] }
     setEditData({ ...editData, scenes })
   }
   const toggleCollapse = (i: number) => {
@@ -256,51 +271,93 @@ export default function ConfirmationView({ data, onConfirm, readOnly = false }: 
                 <th className="px-3 py-2 text-xs font-medium text-slate-500">Join</th>
                 <th className="px-3 py-2 text-xs font-medium text-slate-500">来源</th>
                 <th className="px-3 py-2 text-xs font-medium text-slate-500">控件</th>
-                <th className="px-3 py-2 text-xs font-medium text-slate-500">设备</th>
+                <th className="px-3 py-2 text-xs font-medium text-slate-500">Action</th>
                 <th className="px-3 py-2 text-xs font-medium text-slate-500">图片路径</th>
-                <th className="px-3 py-2 text-xs font-medium text-slate-500 w-16">操作</th>
+                <th className="px-3 py-2 text-xs font-medium text-slate-500 w-24">操作</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {editData.functions.map((f, i) => (
-                <tr key={i} className="hover:bg-slate-50">
-                  <td className="px-3 py-2">
-                    <input value={f.name} onChange={e => updateFunction(i, 'name', e.target.value)} className={CELL_INPUT} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input
-                      type="number" value={f.join_number}
-                      onChange={e => {
-                        const val = parseInt(e.target.value) || 0
-                        updateFunction(i, 'join_number', val)
-                        updateFunction(i, 'join_source', val > 0 ? 'user_specified' : 'auto')
-                      }}
-                      className={`${CELL_INPUT} w-20`}
-                    />
-                  </td>
-                  <td className="px-3 py-2">
-                    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
-                      f.join_source === 'user_specified'
-                        ? 'bg-emerald-50 text-emerald-700'
-                        : 'bg-blue-50 text-blue-600'
-                    }`}>
-                      {f.join_source === 'user_specified' ? '用户指定' : '自动分配'}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2">
-                    <input value={f.btn_type || f.control_type || ''} onChange={e => updateFunction(i, 'control_type', e.target.value)} className={CELL_INPUT_XS} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input value={f.device || ''} onChange={e => updateFunction(i, 'device', e.target.value)} className={CELL_INPUT_XS} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <input value={f.image || ''} onChange={e => updateFunction(i, 'image', e.target.value)} placeholder="选填" className={CELL_INPUT_XS} />
-                  </td>
-                  <td className="px-3 py-2">
-                    <button onClick={() => removeFunction(i)} className="text-xs text-red-400 hover:text-red-600 transition-colors">删除</button>
-                  </td>
-                </tr>
-              ))}
+              {editData.functions.map((f, i) => {
+                const params = f.params ?? {}
+                const action = f.action ?? ''
+                const missing = missingRequired(action, params)
+                const expanded = expandedFunctions.has(i)
+                return (
+                  <Fragment key={i}>
+                    <tr className="hover:bg-slate-50">
+                      <td className="px-3 py-2">
+                        <input value={f.name} onChange={e => updateFunction(i, 'name', e.target.value)} className={CELL_INPUT} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <input
+                          type="number" value={f.join_number}
+                          onChange={e => {
+                            const val = parseInt(e.target.value) || 0
+                            updateFunction(i, 'join_number', val)
+                            updateFunction(i, 'join_source', val > 0 ? 'user_specified' : 'auto')
+                          }}
+                          className={`${CELL_INPUT} w-20`}
+                        />
+                      </td>
+                      <td className="px-3 py-2">
+                        <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${
+                          f.join_source === 'user_specified'
+                            ? 'bg-emerald-50 text-emerald-700'
+                            : 'bg-blue-50 text-blue-600'
+                        }`}>
+                          {f.join_source === 'user_specified' ? '用户指定' : '自动分配'}
+                        </span>
+                      </td>
+                      <td className="px-3 py-2">
+                        <input value={f.btn_type || f.control_type || ''} onChange={e => updateFunction(i, 'control_type', e.target.value)} className={CELL_INPUT_XS} />
+                      </td>
+                      <td className="px-3 py-2 min-w-[130px]">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <input
+                            value={action}
+                            onChange={e => updateFunction(i, 'action', e.target.value)}
+                            placeholder="函数名"
+                            className={`${CELL_INPUT_XS} w-32 font-mono`}
+                          />
+                          {missing.length > 0 && (
+                            <span className="text-[10px] text-red-500 font-medium">
+                              缺{missing.length}参
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2">
+                        <input value={f.image || ''} onChange={e => updateFunction(i, 'image', e.target.value)} placeholder="选填" className={CELL_INPUT_XS} />
+                      </td>
+                      <td className="px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => toggleExpandFn(i)}
+                            className={`text-xs transition-colors ${expanded ? 'text-blue-600 hover:text-blue-800' : 'text-slate-400 hover:text-slate-600'}`}
+                          >
+                            {expanded ? '▲ 参数' : '▼ 参数'}
+                          </button>
+                          <button onClick={() => removeFunction(i)} className="text-xs text-red-400 hover:text-red-600 transition-colors">删除</button>
+                        </div>
+                      </td>
+                    </tr>
+                    {expanded && (
+                      <tr>
+                        <td colSpan={7} className="px-6 py-3 bg-slate-50 border-t border-slate-100">
+                          <div className="max-w-lg">
+                            <ParamsForm
+                              action={action}
+                              params={params}
+                              onChange={next => updateFunction(i, 'params', next)}
+                              readOnly={readOnly}
+                            />
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                )
+              })}
             </tbody>
           </table>
           <button onClick={addFunction} className="mt-2 px-3 py-1.5 text-xs text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-lg transition-colors">
