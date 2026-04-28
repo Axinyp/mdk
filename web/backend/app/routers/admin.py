@@ -10,15 +10,21 @@ from ..models.setting import Setting
 from ..models.user import User
 from ..schemas.admin import (
     LlmConfigCreate, LlmConfigResponse, LlmConfigUpdate,
+    LlmListModelsRequest, LlmListModelsResponse,
     LlmTestRequest, LlmTestResponse,
     SettingResponse, SettingUpdate,
     UserCreate, UserUpdate,
 )
 from ..schemas.auth import UserResponse
 from ..schemas.pagination import PagedResponse
-from ..services.auth import hash_password, require_admin, get_current_user
-from ..services.llm import encrypt_api_key, test_connection as llm_test_connection
+from ..services.auth import hash_password_async, require_admin, get_current_user
+from ..services.llm import (
+    encrypt_api_key,
+    list_available_models as llm_list_models,
+    test_connection as llm_test_connection,
+)
 from ..services import protocol_ingestion
+import httpx
 
 router = APIRouter(prefix="/api/admin", tags=["admin"], dependencies=[Depends(require_admin)])
 
@@ -100,6 +106,50 @@ async def test_llm(req: LlmTestRequest, db: AsyncSession = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Provide config_id or provider+model")
     ok, msg = await llm_test_connection(cfg)
     return LlmTestResponse(success=ok, message=msg, model=cfg.model)
+
+
+@router.post("/llm/list-models", response_model=LlmListModelsResponse)
+async def list_llm_models(req: LlmListModelsRequest, db: AsyncSession = Depends(get_db)):
+    """Probe the provider's catalogue endpoint. Accepts either an existing
+    ``config_id`` or an ad-hoc ``provider/api_base/api_key`` triple — the
+    latter is what the create-form uses before the user has saved.
+    """
+    if req.config_id:
+        cfg = await db.get(LlmConfig, req.config_id)
+        if not cfg:
+            raise HTTPException(status_code=404, detail="Config not found")
+    else:
+        cfg = LlmConfig(
+            name="probe",
+            provider=req.provider or "openai",
+            model="probe",
+            api_base=req.api_base,
+            api_key=encrypt_api_key(req.api_key),
+            is_default=False,
+            is_active=True,
+        )
+    try:
+        models = await llm_list_models(cfg)
+    except httpx.HTTPStatusError as exc:
+        body = exc.response.text[:200] if exc.response is not None else ""
+        return LlmListModelsResponse(
+            success=False, models=[],
+            message=f"HTTP {exc.response.status_code if exc.response else '?'}: {body}",
+        )
+    except httpx.HTTPError as exc:
+        return LlmListModelsResponse(
+            success=False, models=[],
+            message=f"网络错误: {type(exc).__name__}: {exc}",
+        )
+    except Exception as exc:
+        return LlmListModelsResponse(
+            success=False, models=[],
+            message=f"{type(exc).__name__}: {exc}",
+        )
+    return LlmListModelsResponse(
+        success=True, models=models,
+        message=f"已获取 {len(models)} 个模型" if models else "未返回任何模型，请确认 API 地址",
+    )
 
 
 # ── Protocol Submission Review ────────────────────────────────────────────────
@@ -230,7 +280,7 @@ async def create_user(req: UserCreate, db: AsyncSession = Depends(get_db)):
     existing = await db.execute(select(User).where(User.username == req.username))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Username exists")
-    user = User(username=req.username, password=hash_password(req.password), role=req.role)
+    user = User(username=req.username, password=await hash_password_async(req.password), role=req.role)
     db.add(user)
     await db.commit()
     await db.refresh(user)

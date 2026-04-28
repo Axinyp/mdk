@@ -51,6 +51,25 @@ class LlmTestResponse(BaseModel):
     model: str | None = None
 
 
+class LlmListModelsRequest(BaseModel):
+    """Probe a provider's list-models endpoint.
+
+    Either ``config_id`` (for an existing config — server reuses its stored
+    api_key) or the ad-hoc combo of ``provider`` + ``api_base`` + ``api_key``
+    (for a new config still being filled in).
+    """
+    config_id: int | None = None
+    provider: str | None = None
+    api_base: str | None = None
+    api_key: str | None = None
+
+
+class LlmListModelsResponse(BaseModel):
+    success: bool
+    message: str
+    models: list[str] = []
+
+
 class UserCreate(BaseModel):
     username: str = Field(min_length=2, max_length=50)
     password: str = Field(min_length=6)
