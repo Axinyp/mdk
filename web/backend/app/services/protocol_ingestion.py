@@ -1,13 +1,11 @@
 import json
-import logging
 import uuid
 
+from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..models.protocol import Protocol
 from ..models.session import ProtocolSubmission
-
-logger = logging.getLogger(__name__)
 
 
 async def ingest(
@@ -35,7 +33,7 @@ async def ingest(
     db.add(sub)
     await db.commit()
     await db.refresh(sub)
-    logger.info("[PROTOCOL] 新提交 id=%s brand=%s model=%s", sub.id[:8], brand, model_name)
+    logger.info("[PROTOCOL] 新提交 id={} brand={} model={}", sub.id[:8], brand, model_name)
     return sub
 
 
@@ -76,7 +74,7 @@ async def approve(
     submission.reviewer_id = reviewer_id
     submission.approved_protocol_id = proto.id
     await db.commit()
-    logger.info("[PROTOCOL] 审核通过 submission=%s → protocol=%d", submission.id[:8], proto.id)
+    logger.info("[PROTOCOL] 审核通过 submission={} → protocol={}", submission.id[:8], proto.id)
     return proto
 
 
@@ -91,4 +89,4 @@ async def reject(
     submission.reviewer_id = reviewer_id
     submission.reviewer_note = note
     await db.commit()
-    logger.info("[PROTOCOL] 审核拒绝 submission=%s", submission.id[:8])
+    logger.info("[PROTOCOL] 审核拒绝 submission={}", submission.id[:8])

@@ -16,11 +16,7 @@ export default function Login() {
     setLoading(true)
     try {
       const { must_change_password } = await login(username, password)
-      if (must_change_password) {
-        navigate('/change-password')
-      } else {
-        navigate('/')
-      }
+      navigate(must_change_password ? '/change-password' : '/')
     } catch {
       setError('用户名或密码错误')
     } finally {
@@ -29,50 +25,51 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen bg-neutral-50 flex items-center justify-center">
+    <div className="min-h-screen bg-slate-50 flex items-center justify-center px-4" style={{ fontFamily: "'Plus Jakarta Sans', sans-serif" }}>
       <div className="w-full max-w-sm">
         <div className="bg-white rounded-xl shadow-lg p-8">
-          <h1 className="text-2xl font-semibold text-neutral-900 text-center mb-2">
+          <h1 className="text-2xl font-semibold text-slate-900 text-center mb-2">
             MDK Control
           </h1>
-          <p className="text-sm text-neutral-500 text-center mb-8">
+          <p className="text-sm text-slate-500 text-center mb-8">
             中控系统代码生成平台
           </p>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">用户名</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">用户名</label>
               <input
                 type="text"
                 value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full px-3 py-2 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={e => setUsername(e.target.value)}
+                className="w-full px-3 py-2 text-sm text-slate-800 placeholder-slate-400 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="请输入用户名"
                 required
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-neutral-700 mb-1">密码</label>
+              <label className="block text-sm font-medium text-slate-700 mb-1.5">密码</label>
               <input
                 type="password"
                 value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3 py-2 border border-neutral-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                onChange={e => setPassword(e.target.value)}
+                className="w-full px-3 py-2 text-sm text-slate-800 placeholder-slate-400 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="请输入密码"
                 required
               />
             </div>
 
             {error && (
-              <div className="text-sm text-red-500 bg-red-50 rounded-md px-3 py-2">{error}</div>
+              <div className="text-sm text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">{error}</div>
             )}
 
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-md transition-colors disabled:opacity-50"
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
             >
-              {loading ? '登录中...' : '登录'}
+              {loading && <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />}
+              {loading ? '登录中' : '登录'}
             </button>
           </form>
         </div>

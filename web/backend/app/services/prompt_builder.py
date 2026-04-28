@@ -1,11 +1,10 @@
 import json
-import logging
 from pathlib import Path
+
+from loguru import logger
 
 from . import knowledge
 from ..schemas.gen import FunctionItem, ParsedData
-
-logger = logging.getLogger(__name__)
 
 PROMPTS_DIR = Path(__file__).resolve().parent.parent / "prompts"
 
@@ -37,7 +36,7 @@ def build_xml_prompt(
     width, height = resolution.split("x")
 
     control_types = {f.control_type for f in functions_with_joins}
-    logger.debug("[PROMPT] XML 控件类型: %s", control_types)
+    logger.debug("[PROMPT] XML 控件类型: {}", control_types)
     controls_parts = []
     for ct in control_types:
         spec = knowledge.get_control_spec(ct)
@@ -116,10 +115,12 @@ def build_cht_prompt(
 
     block_defs = knowledge.get_essential_blocks()
     action_types = {f.action for f in functions_with_joins if f.action}
-    logger.debug("[PROMPT] CHT action 类型: %s", action_types)
+    logger.debug("[PROMPT] CHT action 类型: {}", action_types)
     sys_functions = knowledge.get_relevant_functions(action_types)
-    logger.debug("[PROMPT] CHT 知识注入 — 语法=%d, 代码块=%d, 函数=%d chars",
-                 len(syntax_rules), len(block_defs), len(sys_functions))
+    logger.debug(
+        "[PROMPT] CHT 知识注入 — 语法={}, 代码块={}, 函数={} chars",
+        len(syntax_rules), len(block_defs), len(sys_functions),
+    )
 
     # 加载 CHT 模板骨架 + 设备/事件参考
     cht_skeleton = knowledge.get_cht_skeleton()
@@ -143,19 +144,44 @@ def build_cht_prompt(
         "functions": [f.model_dump() for f in functions_with_joins],
         "pages": [p.model_dump() for p in confirmed_data.pages],
     }
+    if confirmed_data.scenes:
+        config["scenes"] = [s.model_dump() for s in confirmed_data.scenes]
 
     header_info = ""
     if project_title or project_description:
+        # 注释里只用一行简述（截断），但下方 user_content 会附完整描述供
+        # LLM 提取 IP/端口/MAC/红外码等无法塞进结构化 functions 的参数。
+        comment_summary = (project_description[:100] if project_description else "无")
         header_info = (
             f"\n工程信息（用于填充 {{{{project_header}}}} 注释）：\n"
             f"- 工程名称：{project_title or '未命名'}\n"
-            f"- 需求描述：{project_description[:100] if project_description else '无'}\n"
+            f"- 需求描述（注释用，简述）：{comment_summary}\n"
+        )
+
+    raw_description_block = ""
+    if project_description:
+        raw_description_block = (
+            f"\n\n## 用户原始需求（提取 IP/端口/红外码/MAC 等附加参数时参考）\n"
+            f"```\n{project_description}\n```\n"
+        )
+
+    scenes_instruction = ""
+    if confirmed_data.scenes:
+        scenes_instruction = (
+            "\n\n场景模式处理规则：\n"
+            "- 每个 scene 对象生成一个 FUNCTION（函数名 = scene.name 去空格转大写）\n"
+            "- 函数体按 scene.actions 顺序生成对应调用语句\n"
+            "- action 格式：RELAY.On/Off → RELAY.On(<device>,1)；COM.Send → COM.Send(<device>,<value>)；"
+            "IR.Send → IR.Send(<device>,<value>)；DIMMER.Set → DIMMER.Set(<device>,<value>)\n"
+            "- 若 scene.trigger_join > 0，在 DEFINE_EVENT 中添加 PUSH JOIN:<trigger_join>,1 事件调用该函数\n"
         )
 
     user_content = (
         f"根据以下配置生成完整的 .cht 文件：\n\n"
         f"```json\n{json.dumps(config, ensure_ascii=False, indent=2)}\n```\n"
-        f"{header_info}\n"
+        f"{header_info}"
+        f"{raw_description_block}"
+        f"{scenes_instruction}\n"
         f"基于 CHT 骨架模板填充各 {{{{block}}}} 占位符，输出完整代码。\n"
         f"块顺序：DEFINE_DEVICE → DEFINE_COMBINE → DEFINE_CONSTANT → DEFINE_VARIABLE → "
         f"DEFINE_FUNCTION → DEFINE_TIMER → DEFINE_START → DEFINE_EVENT → DEFINE_PROGRAME\n"

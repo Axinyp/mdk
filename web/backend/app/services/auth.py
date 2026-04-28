@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timedelta, timezone
 
 import bcrypt
@@ -15,14 +16,24 @@ security = HTTPBearer()
 
 
 def hash_password(password: str) -> str:
+    """Synchronous bcrypt hashing — only safe at startup. Use the async variant from request handlers."""
     return bcrypt.hashpw(password.encode(), bcrypt.gensalt()).decode()
 
 
 def verify_password(plain: str, hashed: str) -> bool:
+    """Synchronous bcrypt verification — only safe at startup. Use the async variant from request handlers."""
     try:
         return bcrypt.checkpw(plain.encode(), hashed.encode())
     except (ValueError, TypeError):
         return False
+
+
+async def hash_password_async(password: str) -> str:
+    return await asyncio.to_thread(hash_password, password)
+
+
+async def verify_password_async(plain: str, hashed: str) -> bool:
+    return await asyncio.to_thread(verify_password, plain, hashed)
 
 
 def create_token(user_id: int, username: str, role: str) -> str:

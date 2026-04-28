@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
@@ -6,9 +6,26 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..models.protocol import Protocol
+from ..models.user import User
+from ..services import session_service
 from ..services.auth import get_current_user, require_admin
 
 router = APIRouter(prefix="/api/protocols", tags=["protocols"])
+
+_PROTOCOL_UPLOAD_LIMIT = 10 * 1024 * 1024
+
+
+async def _read_bounded(file: UploadFile, limit: int) -> bytes:
+    """Read an UploadFile in chunks; abort once ``limit`` bytes are exceeded."""
+    chunks: list[bytes] = []
+    total = 0
+    while chunk := await file.read(65536):
+        total += len(chunk)
+        if total > limit:
+            from ..services.exceptions import ProtocolSubmissionFileTooLarge
+            raise ProtocolSubmissionFileTooLarge("文件超过 10MB 限制")
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 class ProtocolCreate(BaseModel):
@@ -107,3 +124,28 @@ async def delete_protocol(protocol_id: int, db: AsyncSession = Depends(get_db), 
     await db.delete(proto)
     await db.commit()
     return {"message": "Deleted"}
+
+
+@router.post("/submissions", status_code=201)
+async def submit_standalone_protocol(
+    brand: str = Form(...),
+    model: str = Form(...),
+    source_type: str = Form(...),
+    raw_content: str | None = Form(None),
+    file: UploadFile | None = File(None),
+    db: AsyncSession = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """Standalone protocol submission, decoupled from any generation session."""
+    file_data = await _read_bounded(file, _PROTOCOL_UPLOAD_LIMIT) if file else None
+    return await session_service.submit_protocol(
+        db,
+        session_id=None,
+        user_id=user.id,
+        brand=brand,
+        model_name=model,
+        source_type=source_type,
+        raw_content=raw_content,
+        file_data=file_data,
+        filename=file.filename if file else None,
+    )

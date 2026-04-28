@@ -1,11 +1,10 @@
 import { useEffect } from 'react'
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
+import ToastContainer from './components/ToastContainer'
 import Login from './pages/Login'
 import ChangePassword from './pages/ChangePassword'
-import Generator from './pages/Generator'
-import History from './pages/History'
-import SessionDetail from './pages/SessionDetail'
+import Workspace from './pages/Workspace'
 import LlmConfig from './pages/admin/LlmConfig'
 import Users from './pages/admin/Users'
 import Protocols from './pages/admin/Protocols'
@@ -19,13 +18,14 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   }, [token, user, fetchMe])
 
   if (!token) return <Navigate to="/login" />
-  if (loading || !user) return <div className="min-h-screen flex items-center justify-center text-neutral-400">加载中...</div>
+  if (loading || !user) return <div className="min-h-screen flex items-center justify-center text-slate-400">加载中...</div>
   return <>{children}</>
 }
 
 export default function App() {
   return (
     <BrowserRouter>
+      <ToastContainer />
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/change-password" element={<ChangePassword />} />
@@ -36,9 +36,7 @@ export default function App() {
             </ProtectedRoute>
           }
         >
-          <Route path="/" element={<Generator />} />
-          <Route path="/history" element={<History />} />
-          <Route path="/history/:id" element={<SessionDetail />} />
+          <Route path="/" element={<Workspace />} />
           <Route path="/admin/llm" element={<LlmConfig />} />
           <Route path="/admin/users" element={<Users />} />
           <Route path="/admin/protocols" element={<Protocols />} />

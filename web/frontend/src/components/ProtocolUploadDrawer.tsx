@@ -1,10 +1,13 @@
 import { useRef, useState } from 'react'
 import api from '../api/client'
+import { errorMessage } from '../api/errors'
 
 interface Props {
-  sessionId: string
+  /** When provided, the submission is bound to that session; otherwise it is standalone. */
+  sessionId?: string
   deviceHint?: string
   onClose: () => void
+  onSubmitted?: () => void
 }
 
 type UploadTab = 'paste' | 'file'
@@ -14,7 +17,7 @@ const MAX_FILE_MB = 10
 const ACCEPT_MIME = ['text/plain', 'text/markdown', 'application/pdf']
 const ACCEPT_EXT = '.txt,.md,.pdf'
 
-export default function ProtocolUploadDrawer({ sessionId, deviceHint = '', onClose }: Props) {
+export default function ProtocolUploadDrawer({ sessionId, deviceHint = '', onClose, onSubmitted }: Props) {
   const [tab, setTab] = useState<UploadTab>('paste')
   const [pasteText, setPasteText] = useState('')
   const [file, setFile] = useState<File | null>(null)
@@ -63,12 +66,16 @@ export default function ProtocolUploadDrawer({ sessionId, deviceHint = '', onClo
         formData.append('source_type', 'file')
         formData.append('file', file)
       }
-      await api.post(`/gen/sessions/${sessionId}/protocol-submissions`, formData, {
+      const url = sessionId
+        ? `/gen/sessions/${sessionId}/protocol-submissions`
+        : '/protocols/submissions'
+      await api.post(url, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       })
       setStatus('pending_review')
-    } catch (e: any) {
-      setErrorMsg(e.response?.data?.detail || '提交失败，请稍后重试')
+      onSubmitted?.()
+    } catch (e) {
+      setErrorMsg(errorMessage(e, '提交失败，请稍后重试'))
       setStatus('error')
     }
   }

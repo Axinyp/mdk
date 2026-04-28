@@ -38,6 +38,44 @@ DEFINE_DEVICE → DEFINE_COMBINE → DEFINE_CONSTANT → DEFINE_VARIABLE → DEF
 6. 空块保留注释行即可（如 DEFINE_TIMER / DEFINE_PROGRAME）
 7. 所有块必须出现，包括空块
 
+## Action 调用签名（**严格遵守，不要凭空增减参数**）
+配置 JSON 中每个 function 的 `action` 字段映射到下列调用之一。**括号内的参数数量是签名定义的，不允许多塞 device/channel 等冗余参数**：
+
+| action | 函数签名 | 参数说明 |
+|--------|---------|----------|
+| `RELAY.On` / `RELAY.Off` | `RELAY.On(<device>, <channel>)` / `RELAY.Off(<device>, <channel>)` | 2 参数：设备名 + 通道号（取 function.channel，未指定填 1） |
+| `COM.Send` | `COM.Send(<device>, "<data>")` | 2 参数：设备名 + 数据串（取自描述中给的串口指令） |
+| `IR.Send` | `IR.Send(<device>, "<irCode>")` | 2 参数：设备名 + 红外码 |
+| `DIMMER.Set` | `DIMMER.Set(<device>, <value>)` | 2 参数：设备名 + 亮度值（0~100） |
+| `IP.Send` | `IP.Send(<device>, "<data>")` | 2 参数：设备名 + 数据串 |
+| `LEVEL` | `LEVEL.Set(<device>, <value>)` 或 `LEVEL.Inc/Dec(<device>)` | DSP 音量；具体看用户描述 |
+| `UDP.Send` / `TCP.Send` | **`SEND_UDP("<ip>", <port>, "<data>")`** / `SEND_TCP("<ip>", <port>, "<data>")` | **3 参数：IP 字符串 + 端口整数 + 数据串。不要传 device 名、不要传 channel**。IP/端口/数据从用户描述中提取（如"172.16.58.211, 端口 54433, 数据 0x424c01910001"） |
+| `WAKEUP_ONLAN` | `WAKEUP_ONLAN("<MAC>")` | 1 参数：MAC 地址字符串 |
+| `HTTP` | `HTTP_GET("<url>")` 或 `HTTP_POST("<url>", "<body>")` | URL 从描述中提取 |
+
+**通用规则**：
+- function.device 字段在 RELAY/COM/IR/DIMMER/IP 等"设备类"action 中作为第 1 参数；在 SEND_UDP/SEND_TCP/WAKEUP_ONLAN 等"网络类"action 中**忽略**（这类函数不需要 device 参数）
+- function.channel 字段仅在 RELAY 类 action 中作为通道号；其他 action 中忽略
+- 用户描述中给出 IP/端口/数据/MAC 时，直接抄入对应位置；缺失时**报告到 missing_info，不要瞎编**
+
+## 场景模式（scenes）生成规则
+若配置中包含 `scenes` 数组，按以下规则处理：
+- 在 **DEFINE_FUNCTION** 块中为每个 scene 生成一个函数：
+  ```
+  FUNCTION <SCENE_NAME_UPPER>()
+      // scene 的 actions 按顺序转换为对应调用
+  ENDFUNCTION
+  ```
+- 函数名 = scene.name 去除空格并转大写，如"会议模式" → `MEETING_MODE`
+- 动作映射：参考上方"Action 调用签名"表（场景内 action 同样适用）
+- 若 scene.trigger_join > 0，在 **DEFINE_EVENT** 末尾添加：
+  ```
+  // <scene.name> 场景触发
+  PUSH JOIN:<trigger_join>, 1
+      <SCENE_NAME_UPPER>()
+  ENDEVENT
+  ```
+
 ## 注释规范
 1. **工程头注释**：填充 {{project_header}} 占位符，格式如下：
 ```

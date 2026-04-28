@@ -5,11 +5,10 @@ LLM 输出语义验证层
 返回 list[str]，非空表示有问题需要修正或记录告警。
 """
 import re
-import logging
+
+from loguru import logger
 
 from ..schemas.gen import ParsedData, DeviceItem
-
-logger = logging.getLogger(__name__)
 
 # CHT 合法设备类型（与 validate.py 保持一致）
 VALID_DEVICE_TYPES = {"RELAY", "COM", "TP", "IR", "IO", "LITE", "VOL", "WM", "DMX512"}
@@ -50,7 +49,7 @@ def validate_parsed_data(data: ParsedData) -> list[str]:
         seen.add(name)
 
     if issues:
-        logger.warning("[SEMANTIC] ParsedData 语义问题 (%d 条): %s", len(issues), issues[:5])
+        logger.warning("[SEMANTIC] ParsedData 语义问题 ({} 条): {}", len(issues), issues[:5])
 
     return issues
 

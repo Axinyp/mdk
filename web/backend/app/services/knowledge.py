@@ -1,10 +1,10 @@
-import logging
 import re
+from functools import lru_cache
 from pathlib import Path
 
-from ..config import settings
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from ..config import settings
 
 CORE_DIR = settings.core_dir
 PROTOCOLS_DIR = CORE_DIR / "protocols"
@@ -29,6 +29,7 @@ ACTION_TO_FUNC: dict[str, str] = {
 }
 
 
+@lru_cache(maxsize=None)
 def _read(path: Path) -> str:
     try:
         return path.read_text(encoding="utf-8")
@@ -36,6 +37,26 @@ def _read(path: Path) -> str:
         return path.read_text(encoding="gbk")
     except FileNotFoundError:
         return ""
+
+
+_CRITICAL_ASSETS = {"protocols_index", "essential_blocks", "cht_skeleton"}
+
+
+def preload() -> None:
+    """Warm the _read cache for high-frequency paths at startup."""
+    entries = {
+        "protocols_index": get_protocols_index(),
+        "syntax_rules": get_syntax_rules(),
+        "patterns_index": get_patterns_index(),
+        "controls_index": get_controls_index(),
+        "essential_blocks": get_essential_blocks(),
+        "cht_skeleton": get_cht_skeleton(),
+    }
+    sizes = {name: len(content) for name, content in entries.items()}
+    logger.info("[KNOWLEDGE] 预热完成: {}", sizes)
+    for name in _CRITICAL_ASSETS:
+        if not entries[name]:
+            logger.warning("[KNOWLEDGE] 关键资产为空: {} — 生成质量可能受影响", name)
 
 
 # ── 协议 ──────────────────────────────────────────────
@@ -188,9 +209,9 @@ def get_essential_blocks() -> str:
         content = get_block_definition(name)
         if content:
             parts.append(content)
-            logger.debug("[KNOWLEDGE] 加载代码块: %s (%d chars)", name, len(content))
+            logger.debug("[KNOWLEDGE] 加载代码块: {} ({} chars)", name, len(content))
         else:
-            logger.warning("[KNOWLEDGE] 代码块缺失: %s.md", name)
+            logger.warning("[KNOWLEDGE] 代码块缺失: {}.md", name)
     return "\n\n---\n\n".join(parts)
 
 
@@ -203,9 +224,9 @@ def get_relevant_functions(action_types: set[str]) -> str:
         if mapped:
             func_names.add(mapped)
         else:
-            logger.warning("[KNOWLEDGE] 未知 action '%s', 无法映射到系统函数", action)
+            logger.warning("[KNOWLEDGE] 未知 action '{}', 无法映射到系统函数", action)
 
-    logger.debug("[KNOWLEDGE] 需加载系统函数: %s", func_names)
+    logger.debug("[KNOWLEDGE] 需加载系统函数: {}", func_names)
     parts = []
     for name in sorted(func_names):
         path = FUNC_COMMON_DIR / f"{name}.md"
@@ -215,10 +236,10 @@ def get_relevant_functions(action_types: set[str]) -> str:
             content = _read(path)
         if content:
             if len(content) > 2000:
-                logger.debug("[KNOWLEDGE] 函数 '%s' 截断: %d → 2000 chars", name, len(content))
+                logger.debug("[KNOWLEDGE] 函数 '{}' 截断: {} → 2000 chars", name, len(content))
                 content = content[:2000] + "\n..."
             parts.append(content)
-            logger.debug("[KNOWLEDGE] 加载函数: %s (%d chars)", name, len(content))
+            logger.debug("[KNOWLEDGE] 加载函数: {} ({} chars)", name, len(content))
         else:
-            logger.warning("[KNOWLEDGE] 函数文件缺失: %s.md", name)
+            logger.warning("[KNOWLEDGE] 函数文件缺失: {}.md", name)
     return "\n\n---\n\n".join(parts)

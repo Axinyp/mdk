@@ -1,5 +1,4 @@
 import asyncio
-import logging
 import re
 import subprocess
 import sys
@@ -7,9 +6,9 @@ import tempfile
 import time
 from pathlib import Path
 
-from ..config import settings
+from loguru import logger
 
-logger = logging.getLogger(__name__)
+from ..config import settings
 
 SCRIPTS_DIR = settings.core_dir / "scripts"
 ANSI_RE = re.compile(r"\x1b\[[0-9;]*m")
@@ -22,9 +21,9 @@ def _clean(text: str) -> str:
 def _run_script_sync(script_name: str, *args: str, timeout: int = 30) -> str:
     script = SCRIPTS_DIR / script_name
     if not script.exists():
-        logger.error("[SCRIPT] 脚本不存在: %s", script)
+        logger.error("[SCRIPT] 脚本不存在: {}", script)
         return f"[ERROR] Script not found: {script}"
-    logger.info("[SCRIPT] 执行 %s %s", script_name, " ".join(args)[:80])
+    logger.info("[SCRIPT] 执行 {} {}", script_name, " ".join(args)[:80])
     t0 = time.perf_counter()
     try:
         result = subprocess.run(
@@ -37,15 +36,17 @@ def _run_script_sync(script_name: str, *args: str, timeout: int = 30) -> str:
         elapsed = time.perf_counter() - t0
         out = (result.stdout or "") + ("\n" + result.stderr if result.stderr else "")
         cleaned = _clean(out)
-        logger.info("[SCRIPT] %s 完成 ← %.1fs, exit=%d, output=%d chars",
-                    script_name, elapsed, result.returncode, len(cleaned))
+        logger.info(
+            "[SCRIPT] {} 完成 ← {:.1f}s, exit={}, output={} chars",
+            script_name, elapsed, result.returncode, len(cleaned),
+        )
         if result.returncode != 0:
-            logger.warning("[SCRIPT] %s 非零退出码=%d", script_name, result.returncode)
-            logger.debug("[SCRIPT] stderr: %s", (result.stderr or "")[:500])
+            logger.warning("[SCRIPT] {} 非零退出码={}", script_name, result.returncode)
+            logger.debug("[SCRIPT] stderr: {}", (result.stderr or "")[:500])
         return cleaned
     except subprocess.TimeoutExpired:
         elapsed = time.perf_counter() - t0
-        logger.error("[SCRIPT] %s 超时 ← %.1fs (limit=%ds)", script_name, elapsed, timeout)
+        logger.error("[SCRIPT] {} 超时 ← {:.1f}s (limit={}s)", script_name, elapsed, timeout)
         return "[ERROR] Script timed out"
 
 
@@ -81,18 +82,18 @@ def _parse_report(output: str) -> dict:
 
 
 async def validate_cht_content(cht_content: str) -> dict:
-    logger.debug("[SCRIPT] CHT 语法校验, 内容长度=%d", len(cht_content))
+    logger.debug("[SCRIPT] CHT 语法校验, 内容长度={}", len(cht_content))
     with tempfile.TemporaryDirectory(prefix="mdk-val-") as tmp:
         path = Path(tmp) / "output.cht"
         path.write_text(cht_content, encoding="utf-8")
         output = await _run_script("validate.py", str(path))
     report = _parse_report(output)
-    logger.debug("[SCRIPT] CHT 校验结果 — critical=%d, warning=%d", report["critical"], report["warning"])
+    logger.debug("[SCRIPT] CHT 校验结果 — critical={}, warning={}", report["critical"], report["warning"])
     return report
 
 
 async def cross_validate_content(xml_content: str, cht_content: str) -> dict:
-    logger.debug("[SCRIPT] 交叉校验, XML=%d chars, CHT=%d chars", len(xml_content), len(cht_content))
+    logger.debug("[SCRIPT] 交叉校验, XML={} chars, CHT={} chars", len(xml_content), len(cht_content))
     with tempfile.TemporaryDirectory(prefix="mdk-xval-") as tmp:
         xml_path = Path(tmp) / "Project.xml"
         cht_path = Path(tmp) / "output.cht"
@@ -100,7 +101,7 @@ async def cross_validate_content(xml_content: str, cht_content: str) -> dict:
         cht_path.write_text(cht_content, encoding="utf-8")
         output = await _run_script("cross_validate.py", str(xml_path), str(cht_path))
     report = _parse_report(output)
-    logger.debug("[SCRIPT] 交叉校验结果 — critical=%d, warning=%d", report["critical"], report["warning"])
+    logger.debug("[SCRIPT] 交叉校验结果 — critical={}, warning={}", report["critical"], report["warning"])
     return report
 
 
@@ -112,7 +113,7 @@ async def run_full_validation(xml_content: str, cht_content: str) -> dict:
         "critical": cht_report["critical"] + cross_report["critical"],
         "warning": cht_report["warning"] + cross_report["warning"],
     }
-    logger.info("[SCRIPT] 校验完成 — 总计 critical=%d, warning=%d", summary["critical"], summary["warning"])
+    logger.info("[SCRIPT] 校验完成 — 总计 critical={}, warning={}", summary["critical"], summary["warning"])
     return {
         "cht_syntax": cht_report,
         "cross_check": cross_report,

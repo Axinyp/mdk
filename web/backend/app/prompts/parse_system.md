@@ -36,6 +36,16 @@
   "pages": [
     {"name": "页面名", "type": "guide|main|sub|dialog", "bg_image": "背景图片路径或null（由用户手动填写，解析时留null）"}
   ],
+  "scenes": [
+    {
+      "name": "场景名称",
+      "scene_type": "meeting|rest|leave|custom",
+      "trigger_join": 0,
+      "actions": [
+        {"device": "设备名", "action": "RELAY.On|RELAY.Off|COM.Send|IR.Send|DIMMER.Set|IP.Send", "value": "指令值或null"}
+      ]
+    }
+  ],
   "missing_info": ["缺失信息描述"],
   "image_path": null
 }
@@ -56,3 +66,4 @@
 12. 设备名命名规则：以硬件型号为基础，同型号多个时后缀用顺序号（1、2、3…），不用板号作后缀。例如两块 TR-0740S（板号2和3）的 IR 口命名为 TR_0740S_IR1 和 TR_0740S_IR2，而不是 TR_0740S_IR2 和 TR_0740S_IR3
 13. 同一块物理板的不同功能（如 COM 和 IR）分别声明，board 字段填该板的真实编号
 14. **触摸屏必须声明**：用户描述中出现触摸屏编号（T:N 或"触摸屏 N 号"等）时，必须在 devices 中声明一条 type=TP、board=N 的设备；CHT 代码中的所有事件都要引用此设备名，不可省略
+15. **scenes 字段**：若用户描述中提到"场景"、"模式"（如会议模式、休息模式、离开模式、上课模式等），则在 scenes 数组中提取每个场景；未提及任何场景时 scenes 为空数组 []；scene_type 从 meeting/rest/leave/custom 中选择最匹配的；actions 按场景描述中提到的动作序列填写；trigger_join 设为 0（由用户后续配置）

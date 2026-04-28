@@ -29,13 +29,18 @@ async def get_messages(
     session_id: str,
     limit: int = 20,
 ) -> list[SessionMessage]:
+    """Return the latest ``limit`` messages, in chronological order.
+
+    Fetched DESC + reversed so a session with >limit messages still uses
+    its most recent context window (older messages drop off the front).
+    """
     result = await db.execute(
         select(SessionMessage)
         .where(SessionMessage.session_id == session_id)
-        .order_by(SessionMessage.created_at.asc(), SessionMessage.id.asc())
+        .order_by(SessionMessage.created_at.desc(), SessionMessage.id.desc())
         .limit(limit)
     )
-    return list(result.scalars().all())
+    return list(reversed(result.scalars().all()))
 
 
 async def get_latest_revision(

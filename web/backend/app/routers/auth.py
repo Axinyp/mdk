@@ -8,7 +8,7 @@ from ..schemas.auth import (
     LoginRequest, PasswordChangeRequest, RegisterRequest, TokenResponse, UserResponse,
 )
 from ..services.auth import (
-    create_token, get_current_user, hash_password, require_admin, verify_password,
+    create_token, get_current_user, hash_password_async, require_admin, verify_password_async,
 )
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
@@ -18,7 +18,7 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 async def login(req: LoginRequest, db: AsyncSession = Depends(get_db)):
     result = await db.execute(select(User).where(User.username == req.username))
     user = result.scalar_one_or_none()
-    if not user or not verify_password(req.password, user.password):
+    if not user or not await verify_password_async(req.password, user.password):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
     if user.status != "active":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account disabled")
@@ -35,7 +35,12 @@ async def register(
     existing = await db.execute(select(User).where(User.username == req.username))
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Username already exists")
-    user = User(username=req.username.strip(), password=hash_password(req.password), role=req.role, must_change_password=True)
+    user = User(
+        username=req.username.strip(),
+        password=await hash_password_async(req.password),
+        role=req.role,
+        must_change_password=True,
+    )
     db.add(user)
     await db.commit()
     await db.refresh(user)
@@ -53,9 +58,9 @@ async def change_password(
     user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    if not verify_password(req.old_password, user.password):
+    if not await verify_password_async(req.old_password, user.password):
         raise HTTPException(status_code=400, detail="Old password incorrect")
-    user.password = hash_password(req.new_password)
+    user.password = await hash_password_async(req.new_password)
     user.must_change_password = False
     await db.commit()
     return {"message": "Password changed"}

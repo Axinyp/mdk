@@ -4,8 +4,8 @@ import api from '../api/client'
 interface User {
   id: number
   username: string
-  role: string
-  status: string
+  role: 'admin' | 'member'
+  status: 'active' | 'disabled'
 }
 
 interface AuthState {
