@@ -184,7 +184,7 @@ async def stream_parse(
             logger.warning("[FLOW] 语义校验发现 {} 个问题: {}", len(semantic_issues), semantic_issues[:3])
             if not parsed.missing_info:
                 parsed.missing_info = []
-            parsed.missing_info = list(parsed.missing_info) + [f"[语义告警] {s}" for s in semantic_issues]
+            parsed.missing_info = list(parsed.missing_info) + [f"[语义告警] {i.message}" for i in semantic_issues]
 
         session.parsed_data = json.dumps(parsed.model_dump(), ensure_ascii=False)
         session.llm_model = config.model
@@ -227,17 +227,17 @@ async def stage_confirm(db: AsyncSession, session_id: str, confirmed: ParsedData
     session = await _transition(db, session_id, SessionStatus.CONFIRMED)
 
     try:
-        # ── 契约校验：forbidden key 违规 = critical 阻断；required 缺失 = warn 放行 ──
+        # ── 契约校验：forbidden key 违规 = error 阻断；其余 = warn 放行 ──
         issues = semantic_validator.validate_parsed_data(confirmed)
-        critical = [s for s in issues if not s.startswith("[warn]")]
-        warnings = [s for s in issues if s.startswith("[warn]")]
+        errors = [i for i in issues if i.severity == "error"]
+        warnings = [i for i in issues if i.severity == "warn"]
         if warnings:
             logger.warning("[FLOW] 契约告警（非阻断）— {} 条", len(warnings))
-        if critical:
-            detail = "\n".join(critical)
-            logger.warning("[FLOW] 契约校验阻断 — {} 个 critical 问题:\n{}", len(critical), detail)
+        if errors:
+            detail = "\n".join(i.message for i in errors)
+            logger.warning("[FLOW] 契约校验阻断 — {} 个 error:\n{}", len(errors), detail)
             await _mark_error(session, db, f"Contract validation failed:\n{detail}")
-            raise ContractValidationError("; ".join(critical[:3]))
+            raise ContractValidationError("; ".join(i.message for i in errors[:3]))
 
         functions_with_joins = join_registry.allocate(confirmed.functions)
         logger.debug("[FLOW] Join 分配完成, 功能数={}", len(functions_with_joins))
