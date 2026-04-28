@@ -144,13 +144,9 @@ def build_cht_prompt(
         "functions": [f.model_dump() for f in functions_with_joins],
         "pages": [p.model_dump() for p in confirmed_data.pages],
     }
-    if confirmed_data.scenes:
-        config["scenes"] = [s.model_dump() for s in confirmed_data.scenes]
 
     header_info = ""
     if project_title or project_description:
-        # 注释里只用一行简述（截断），但下方 user_content 会附完整描述供
-        # LLM 提取 IP/端口/MAC/红外码等无法塞进结构化 functions 的参数。
         comment_summary = (project_description[:100] if project_description else "无")
         header_info = (
             f"\n工程信息（用于填充 {{{{project_header}}}} 注释）：\n"
@@ -165,27 +161,11 @@ def build_cht_prompt(
             f"```\n{project_description}\n```\n"
         )
 
-    scenes_instruction = ""
-    if confirmed_data.scenes:
-        scenes_instruction = (
-            "\n\n场景模式处理规则：\n"
-            "- 每个 scene 对象生成一个 FUNCTION（函数名 = scene.name 去空格转大写）\n"
-            "- 函数体按 scene.actions 顺序生成对应调用语句\n"
-            "- action 格式（官方真名直引）：\n"
-            "  ON_RELAY/OFF_RELAY → ON_RELAY(<dev>, <channel>)；\n"
-            "  SEND_COM → SEND_COM(<dev>, <channel>, \"<hex>\")；\n"
-            "  SEND_IRCODE → SEND_IRCODE(<dev>, <channel>, IRCODE<\"...\">)；\n"
-            "  SEND_LITE → SEND_LITE(<dev>, <channel>, <val>)；\n"
-            "  SEND_UDP → SEND_UDP(\"<ip>\", <port>, \"<str>\")（3 参数，无 dev）\n"
-            "- 若 scene.trigger_join > 0，在 DEFINE_EVENT 中添加 PUSH JOIN:<trigger_join>,1 事件调用该函数\n"
-        )
-
     user_content = (
         f"根据以下配置生成完整的 .cht 文件：\n\n"
         f"```json\n{json.dumps(config, ensure_ascii=False, indent=2)}\n```\n"
         f"{header_info}"
-        f"{raw_description_block}"
-        f"{scenes_instruction}\n"
+        f"{raw_description_block}\n"
         f"基于 CHT 骨架模板填充各 {{{{block}}}} 占位符，输出完整代码。\n"
         f"块顺序：DEFINE_DEVICE → DEFINE_COMBINE → DEFINE_CONSTANT → DEFINE_VARIABLE → "
         f"DEFINE_FUNCTION → DEFINE_TIMER → DEFINE_START → DEFINE_EVENT → DEFINE_PROGRAME\n"

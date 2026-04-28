@@ -69,24 +69,6 @@ DEFINE_DEVICE → DEFINE_COMBINE → DEFINE_CONSTANT → DEFINE_VARIABLE → DEF
 3. **严禁从用户原始需求中重抽参数**，所有附加参数已结构化在 `function.params`，直接读
 4. **params 缺键时**：在 cht 末尾用注释报告，不要瞎编：`// MISSING_PARAMS: <function_name> 缺少 <key>`
 
-## 场景模式（scenes）生成规则
-若配置中包含 `scenes` 数组，按以下规则处理：
-- 在 **DEFINE_FUNCTION** 块中为每个 scene 生成一个函数：
-  ```
-  FUNCTION <SCENE_NAME_UPPER>()
-      // scene 的 actions 按顺序转换为对应调用
-  ENDFUNCTION
-  ```
-- 函数名 = scene.name 去除空格并转大写，如"会议模式" → `MEETING_MODE`
-- 动作映射：参考上方"Action 调用签名"表（场景内 action 同样适用）
-- 若 scene.trigger_join > 0，在 **DEFINE_EVENT** 末尾添加：
-  ```
-  // <scene.name> 场景触发
-  PUSH JOIN:<trigger_join>, 1
-      <SCENE_NAME_UPPER>()
-  ENDEVENT
-  ```
-
 ## 注释规范
 1. **工程头注释**：填充 {{project_header}} 占位符，格式如下：
 ```
